@@ -1,6 +1,6 @@
 // Package quote 提供投资模块行情子系统：Provider 降级链 + Redis 缓存 + DB 兜底。
 //
-// 降级顺序（Quotes）：Redis 60s 缓存 → provider 链（Yahoo，Task 2.4 加 Stooq）
+// 降级顺序（Quotes）：Redis 60s 缓存 → provider 链（Yahoo → Stooq）
 // → assets.current_price 兜底（Stale=true）→ 无兜底则该 symbol 缺席并 log。
 // 行情失败只降级不抛出：Quotes 永不返回 error。
 package quote
@@ -56,7 +56,7 @@ type Provider interface {
 var ErrUnsupported = errors.New("symbol unsupported by provider")
 
 // GoldResolver 解析 GoldSymbol（人民币金价/克）报价。
-// Task 2.4 注入实现（XAUUSD × USDCNY ÷ GramsPerTroyOunce）；本任务仅留 hook，nil 时跳过。
+// 由 gold.go 的 goldResolver 实现（GC=F × USDCNY ÷ GramsPerTroyOunce）；NewService 注入，nil 时跳过。
 type GoldResolver interface {
 	ResolveGold(ctx context.Context) (*RawQuote, error)
 }
@@ -64,7 +64,7 @@ type GoldResolver interface {
 const (
 	// GoldSymbol 为积存金（人民币/克）的虚拟 symbol，price_source=computed_gold_cny。
 	GoldSymbol = "GOLD_CNY_G"
-	// GramsPerTroyOunce 为金衡盎司克数（Task 2.4 积存金换算用）。
+	// GramsPerTroyOunce 为金衡盎司克数（积存金 CNY/克换算用）。
 	GramsPerTroyOunce = 31.1035
 )
 
@@ -84,15 +84,18 @@ type Service struct {
 	providers []Provider
 	db        *sqlx.DB
 	rdb       *redis.Client
-	client    *http.Client // 带代理的共享 client，供未来 provider 复用
-	gold      GoldResolver // Task 2.4 注入；nil 时 GoldSymbol 走兜底
+	client    *http.Client // 带代理的共享 client，供 provider 复用
+	gold      GoldResolver // NewService 注入 goldResolver；nil（如测试构造）时 GoldSymbol 走兜底
 }
 
 // NewService 组装行情服务（Ruling-1 固定签名）：
-// QuoteProxy 非空时经代理访问 Yahoo，超时 10s；一级源为 YahooProvider。
+// QuoteProxy 非空时经代理访问外网，超时 10s；provider 降级链为 Yahoo → Stooq；
+// 并注入 goldResolver 解析 GoldSymbol（GC=F × USDCNY → CNY/克）。
 func NewService(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *Service {
 	client := newHTTPClient(cfg)
-	return newServiceWithProviders(cfg, db, rdb, NewYahooProvider(client))
+	s := newServiceWithProviders(cfg, db, rdb, NewYahooProvider(client), NewStooqProvider(client))
+	s.gold = newGoldResolver(s)
+	return s
 }
 
 // newServiceWithProviders 供测试注入 fake provider / 替换 provider 链。
@@ -166,7 +169,7 @@ func (s *Service) Quotes(ctx context.Context, symbols []string) map[string]Quote
 func (s *Service) fetchFresh(ctx context.Context, symbol string) (*RawQuote, bool) {
 	if symbol == GoldSymbol {
 		if s.gold == nil {
-			log.Printf("quote: gold resolver not installed (Task 2.4), %s falls back", symbol)
+			log.Printf("quote: gold resolver not installed, %s falls back", symbol)
 			return nil, false
 		}
 		raw, err := s.gold.ResolveGold(ctx)
