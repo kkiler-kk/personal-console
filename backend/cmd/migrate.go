@@ -91,5 +91,19 @@ func autoMigrate(db *sqlx.DB) {
 			log.Fatalf("auto migrate failed: %v", err)
 		}
 	}
+
+	// add categories.section if missing (idempotent)
+	var colCount int
+	if err := db.Get(&colCount, `
+		SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = DATABASE() AND table_name = 'categories' AND column_name = 'section'`); err != nil {
+		log.Fatalf("auto migrate failed: %v", err)
+	}
+	if colCount == 0 {
+		if _, err := db.Exec("ALTER TABLE categories ADD COLUMN section VARCHAR(20) NOT NULL DEFAULT 'blog'"); err != nil {
+			log.Fatalf("auto migrate failed: %v", err)
+		}
+	}
+
 	log.Println("database tables migrated")
 }

@@ -45,17 +45,29 @@ func (h *CategoryHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// validSection normalizes a section value against the five-zone whitelist.
+// Any value outside the whitelist falls back to "blog".
+func validSection(s string) string {
+	switch s {
+	case "invest", "learn", "fitness", "life":
+		return s
+	default:
+		return "blog"
+	}
+}
+
 func (h *CategoryHandler) Create(c *gin.Context) {
 	var req struct {
-		Name string `json:"name" binding:"required"`
-		Slug string `json:"slug" binding:"required"`
+		Name    string `json:"name" binding:"required"`
+		Slug    string `json:"slug" binding:"required"`
+		Section string `json:"section"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	result, err := h.db.Exec("INSERT INTO categories (name, slug) VALUES (?, ?)", req.Name, req.Slug)
+	result, err := h.db.Exec("INSERT INTO categories (name, slug, section) VALUES (?, ?, ?)", req.Name, req.Slug, validSection(req.Section))
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "category already exists"})
 		return
@@ -75,15 +87,16 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 	}
 
 	var req struct {
-		Name string `json:"name"`
-		Slug string `json:"slug"`
+		Name    string `json:"name"`
+		Slug    string `json:"slug"`
+		Section string `json:"section"`
 	}
 	if err = c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	_, err = h.db.Exec("UPDATE categories SET name = ?, slug = ? WHERE id = ?", req.Name, req.Slug, id)
+	_, err = h.db.Exec("UPDATE categories SET name = ?, slug = ?, section = ? WHERE id = ?", req.Name, req.Slug, validSection(req.Section), id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
