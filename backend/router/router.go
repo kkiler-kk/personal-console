@@ -110,6 +110,7 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 
 		// invest: positions / quotes / price history
 		protected.GET("/positions", ih.Positions)
+		protected.GET("/positions/history", ih.PositionsHistory)
 		protected.GET("/quotes", ih.Quotes)
 		protected.GET("/price-history", ih.PriceHistory)
 	}

@@ -209,6 +209,104 @@ func (h *InvestHandler) Quotes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"quotes": out})
 }
 
+// tradeScanRow 为 PositionsHistory 的 trades 查询扫描结构（ValueCurve 不需要 note，不选取）。
+type tradeScanRow struct {
+	AssetID  int64     `db:"asset_id"`
+	Side     string    `db:"side"`
+	Quantity float64   `db:"quantity"`
+	Price    float64   `db:"price"`
+	Fee      float64   `db:"fee"`
+	TradedAt time.Time `db:"traded_at"`
+}
+
+// closeScanRow 为 PositionsHistory 的 price_history 查询扫描结构。
+type closeScanRow struct {
+	Symbol string    `db:"symbol"`
+	Date   time.Time `db:"date"`
+	Close  float64   `db:"close"`
+}
+
+// PositionsHistory 返回组合价值曲线（CNY 口径）：?days=（默认 90，clamp 1..365）。
+// dates 为最近 days 个自然日（今天在内，升序，time.Local 日期部分）；
+// 每日单价取 price_history（窗口内）当日/最近更早 close，无则回退 asset.current_price，
+// USD 资产按 USDCNY 汇率折算。响应 {points:[{date,value,cost,pnl}], currency:"CNY"}。
+func (h *InvestHandler) PositionsHistory(c *gin.Context) {
+	days := 90
+	if d := c.Query("days"); d != "" {
+		parsed, err := strconv.Atoi(d)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid days"})
+			return
+		}
+		days = parsed
+	}
+	if days < 1 {
+		days = 1
+	}
+	if days > 365 {
+		days = 365
+	}
+
+	ctx := c.Request.Context()
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	dates := make([]time.Time, days)
+	for i := range dates {
+		dates[i] = today.AddDate(0, 0, i-days+1) // 升序，含今天
+	}
+
+	tradeRows := []tradeScanRow{}
+	if err := h.db.SelectContext(ctx, &tradeRows,
+		"SELECT asset_id, side, quantity, price, fee, traded_at FROM trades ORDER BY traded_at, id"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	trades := make([]portfolio.TradeRow, 0, len(tradeRows))
+	for _, t := range tradeRows {
+		trades = append(trades, portfolio.TradeRow{
+			AssetID: t.AssetID, Side: t.Side, Quantity: t.Quantity,
+			Price: t.Price, Fee: t.Fee, TradedAt: t.TradedAt,
+		})
+	}
+
+	assets := []model.Asset{}
+	if err := h.db.SelectContext(ctx, &assets,
+		"SELECT * FROM assets ORDER BY created_at"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	symToID := make(map[string]int64, len(assets))
+	metas := make([]portfolio.AssetMeta, 0, len(assets))
+	for _, a := range assets {
+		symToID[a.Symbol] = a.ID
+		m := portfolio.AssetMeta{ID: a.ID, Symbol: a.Symbol, Currency: a.Currency}
+		if a.CurrentPrice != nil {
+			m.CurrentPrice = *a.CurrentPrice
+		}
+		metas = append(metas, m)
+	}
+
+	closeRows := []closeScanRow{}
+	if err := h.db.SelectContext(ctx, &closeRows,
+		"SELECT ph.symbol, ph.date, ph.close FROM price_history ph WHERE ph.date >= ? ORDER BY ph.date",
+		dates[0].Format("2006-01-02")); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	closes := make([]portfolio.CloseRow, 0, len(closeRows))
+	for _, cr := range closeRows {
+		id, ok := symToID[cr.Symbol]
+		if !ok {
+			continue // 无对应 asset 的 symbol 忽略
+		}
+		closes = append(closes, portfolio.CloseRow{AssetID: id, Date: cr.Date, Close: cr.Close})
+	}
+
+	fx := h.quotes.USDCNY(ctx)
+	points := portfolio.ValueCurve(trades, closes, metas, dates, fx)
+	c.JSON(http.StatusOK, gin.H{"points": points, "currency": "CNY"})
+}
+
 // historyPoint 为 /api/price-history 的单点（date 为 YYYY-MM-DD 字符串）。
 type historyPoint struct {
 	Date  string  `json:"date"`
