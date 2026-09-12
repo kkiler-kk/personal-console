@@ -1,10 +1,11 @@
 import { Routes, Route } from "react-router-dom"
-import { TrendingUp, Languages, Dumbbell, Compass } from "lucide-react"
+import { Languages, Dumbbell, Compass } from "lucide-react"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { PagePlaceholder } from "@/components/PagePlaceholder"
 import Login from "@/pages/Login"
 import Dashboard from "@/pages/Dashboard"
+import InvestPage from "@/pages/invest/InvestPage"
 import PostList from "@/pages/blog/PostList"
 import PostDetail from "@/pages/blog/PostDetail"
 import Archive from "@/pages/blog/Archive"
@@ -21,7 +22,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/invest" element={<PagePlaceholder title="投资" description="持仓与交易记录模块将在阶段 2 上线" icon={TrendingUp} />} />
+        <Route path="/invest" element={<InvestPage />} />
         <Route path="/learn" element={<PagePlaceholder title="学习" description="生词本与 SRS 复习将在阶段 3 上线" icon={Languages} />} />
         <Route path="/fitness" element={<PagePlaceholder title="健身" description="训练日志与身体数据将在阶段 4 上线" icon={Dumbbell} />} />
         <Route path="/life" element={<LifePage />} />

@@ -1,4 +1,4 @@
-import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Post, PostListResp, ArchiveItem, Tag } from "./types"
+import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Post, PostListResp, ArchiveItem, Tag, Asset, AssetType, PriceSource, Trade, PositionsResp, PositionsHistoryResp } from "./types"
 
 const BASE = "/api"
 
@@ -90,4 +90,18 @@ export const api = {
   deleteGalleryFile: (filename: string) => request<{ message: string }>(`/gallery/${filename}`, { method: "DELETE" }),
 
   getDashboardSummary: () => request<DashboardSummary>("/dashboard/summary"),
+
+  getAssets: () => request<{ assets: Asset[] }>("/assets"),
+  createAsset: (body: { symbol: string; name: string; type: AssetType; price_source: PriceSource; currency: "USD" | "CNY" }) =>
+    request<{ id: number }>("/assets", { method: "POST", body: JSON.stringify(body) }),
+  updateAsset: (id: number, body: { name: string }) => request<{ message: string }>(`/assets/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteAsset: (id: number) => request<{ message: string }>(`/assets/${id}`, { method: "DELETE" }),
+  updateAssetPrice: (id: number, price: number) => request<{ message: string }>(`/assets/${id}/price`, { method: "PUT", body: JSON.stringify({ price }) }),
+  getTrades: (assetId?: number) => request<{ trades: Trade[] }>(`/trades${qs({ asset_id: assetId })}`),
+  createTrade: (body: { asset_id: number; side: "buy" | "sell"; quantity: number; price: number; fee: number; traded_at: string; note?: string }) =>
+    request<{ id: number }>("/trades", { method: "POST", body: JSON.stringify(body) }),
+  deleteTrade: (id: number) => request<{ message: string }>(`/trades/${id}`, { method: "DELETE" }),
+  getPositions: () => request<PositionsResp>("/positions"),
+  getPositionsHistory: (days = 90) => request<PositionsHistoryResp>(`/positions/history${qs({ days })}`),
+  getPriceHistory: (symbol: string, days = 90) => request<{ points: { date: string; close: number }[] }>(`/price-history${qs({ symbol, days })}`),
 }

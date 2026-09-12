@@ -22,3 +22,28 @@ export interface DashboardSummary {
 }
 export interface PostListResp { posts: Post[]; total: number; page: number; size: number }
 export interface ArchiveItem { year: number; month: number; count: number }
+
+export type AssetType = "stock" | "etf" | "metal" | "other"
+export type PriceSource = "yahoo" | "computed_gold_cny" | "manual"
+export interface Asset {
+  id: number; symbol: string; name: string; type: AssetType; price_source: PriceSource
+  currency: "USD" | "CNY"; current_price: number | null; price_updated_at: string | null
+  created_at: string; updated_at: string
+}
+export interface Trade {
+  id: number; asset_id: number; side: "buy" | "sell"; quantity: number; price: number
+  fee: number; traded_at: string; note: string; created_at: string; asset?: Asset
+}
+export interface PositionRow {
+  asset: Asset; quantity: number; avg_cost: number; cost_basis: number
+  market_value: number | null; realized_pnl: number; unrealized_pnl: number | null
+  price: number | null; previous_close: number | null; day_change_pct: number | null
+  stale: boolean; price_updated_at: string | null
+}
+export interface PositionsSummary {
+  total_value_cny: number; total_cost_cny: number; total_pnl_cny: number
+  total_pnl_pct: number; day_pnl_cny: number | null; fx_usdcny: number
+}
+export interface PositionsResp { positions: PositionRow[]; summary: PositionsSummary }
+export interface CurvePoint { date: string; value: number; cost: number; pnl: number }
+export interface PositionsHistoryResp { points: CurvePoint[]; currency: string }
