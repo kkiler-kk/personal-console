@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A personal blog system with a React frontend and Go backend. Uses MySQL for persistence and Redis for caching.
 
-- **Frontend**: React 18 + Vite (SPA on `localhost:3000`)
+- **Frontend**: React 19 + Vite + TypeScript (SPA on `localhost:3000`)
 - **Backend**: Go 1.22 + Gin (REST API on `localhost:8080`)
 - **Database**: MySQL 8.0 (via docker-compose)
 - **Cache**: Redis 7 (via docker-compose)
@@ -40,14 +40,19 @@ Entry point: `cmd/main.go` → loads config, init DB + Redis, auto-migrates tabl
 
 ### Frontend (`frontend/`)
 
-Entry point: `src/main.jsx` → `src/App.jsx` (routing + layout).
+Entry point: `src/main.tsx` → `src/App.tsx` (routing). UI is Chinese-only (no i18n).
 
-- `src/pages/` — Route pages: Home, PostDetail, Archive, CategoryPosts, TagPosts, Login, Admin
-- `src/services/api.js` — Axios-like fetch wrapper for API calls
-- `src/context/AuthContext.jsx` — Auth state via React Context
-- `src/styles/index.css` — Global styles
+- `src/components/ui/` — shadcn/ui primitives, `radix-nova` style variant (classic Radix API, imported from the unified `radix-ui` package)
+- `src/components/layout/` — AppLayout shell: Sidebar, Topbar, MobileTabBar, CommandPalette
+- `src/components/blog/` — PostCard, CommentSection, Markdown, Pagination
+- `src/pages/` — Dashboard, Login, `blog/` (PostList/PostDetail/Archive/CategoryPosts/TagPosts), `admin/` (AdminPosts/AdminCategories/PostEditor), `life/` (LifePage photo wall)
+- `src/lib/api.ts` — fetch wrapper (token injection, 401 → redirect to /login); `src/lib/types.ts` — shared TS types; `src/lib/format.ts` — formatters
+- `src/context/` — AuthContext (JWT in localStorage), ThemeContext (light/dark)
+- `src/index.css` — Tailwind v4 design tokens + global styles
+- `@/` aliases `src/` (configured in both `tsconfig.json` and `vite.config.ts`)
+- Smoke test: `scripts/smoke.mjs` (Playwright) — see Key Design Decisions
 
-Vite dev server proxies `/api` to `localhost:8080`.
+Vite dev server proxies `/api` and `/uploads` to `localhost:8080`.
 
 ### Database Schema
 
@@ -59,13 +64,13 @@ Tables: `users`, `categories`, `posts`, `tags`, `post_tags` (many-to-many). Post
 - **Redis caching** — Post lists, categories, tags cached 5–30 min. Cache invalidated on post/category/tag mutations.
 - **First user is admin** — No role column; the first registered user gets admin privileges implicitly.
 - **Slug-based URLs** — Posts and categories use human-readable slugs, not IDs.
-- **No test suite** — Project currently has no automated tests.
+- **Playwright smoke test** — `frontend/scripts/smoke.mjs` covers login → Dashboard → blog → admin → life pages with a real browser (`SMOKE_USER=<user> SMOKE_PASS=<pass> node frontend/scripts/smoke.mjs`, expects `SMOKE PASS ✅`). Backend fixes are verified by targeted curl/API checks plus a full smoke re-run. No unit test suite yet.
 
 ## Configuration
 
 - Backend reads from `backend/.env` (copy from `.env.example`).
 - Docker Compose uses DaoCloud mirror for images (`docker.m.daocloud.io`).
-- Frontend Vite config in `vite.config.js` — port 3000 with `/api` proxy.
+- Frontend Vite config in `vite.config.ts` — port 3000 with `/api` and `/uploads` proxy.
 
 ## No Existing Rules
 
