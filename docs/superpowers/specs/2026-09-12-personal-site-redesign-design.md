@@ -1,7 +1,7 @@
 # 个人控制台网站重构设计
 
-日期：2026-09-12
-状态：已与用户对齐，待审阅
+日期：2026-09-12（同日修订：学习模块简化，废弃生词本/SRS）
+状态：已与用户对齐，阶段 1 已按此交付
 目标读者：本仓库的实施者（Claude / 用户本人）
 
 ## 1. 背景与目标
@@ -13,7 +13,7 @@
 | 板块 | 定位 | 形态 |
 |---|---|---|
 | 📈 投资 | 美股个股、ETF（如 QQQ）、银行积存金（按克/人民币）的持仓与盈亏跟踪 | 工具 |
-| 🗣️ 学习 | 英语、西班牙语生词本 + 间隔重复复习（SRS） | 工具 |
+| 🗣️ 学习 | 英语/西班牙语**学习阶段记录 + 每日打卡**（用户已有其他语言学习软件，不做生词本/SRS——2026-09-12 修订） | 轻工具 |
 | 💪 健身 | 训练日志、身体数据曲线、打卡日历 | 工具 |
 | 🌱 生活 | 习惯打卡热力图、随手记、照片墙 | 工具 + 内容 |
 | ✍️ 博客 | 现有文章/分类/标签/归档/评论系统，保留并重做样式 | 内容 |
@@ -41,7 +41,7 @@
 │ Go 1.22 + Gin · sqlx · MySQL 8 · Redis 7           │
 │ 保留: config/ middleware/ pkg/jwt handler(post,    │
 │       category, user, comment, gallery, upload)    │
-│ 新增: handler(trade, asset, vocab, review,         │
+│ 新增: handler(trade, asset, learn,                 │
 │       workout, habit, dashboard)                   │
 │       pkg/quote（行情子系统）                       │
 │       每日行情快照定时任务                          │
@@ -96,29 +96,24 @@ CREATE TABLE price_history (
   UNIQUE KEY uk_symbol_date (symbol, date)
 );
 
--- 生词本（含 SM-2 调度字段）
-CREATE TABLE vocab_words (
-  id           BIGINT PK AUTO_INCREMENT,
-  lang         VARCHAR(8) NOT NULL,          -- en / es
-  word         VARCHAR(100) NOT NULL,
-  meaning      VARCHAR(500) NOT NULL,
-  example      TEXT,
-  ease         DECIMAL(4,2) NOT NULL DEFAULT 2.50,
-  interval_days INT NOT NULL DEFAULT 0,
-  due_at       DATETIME NOT NULL,            -- 下次复习时间
-  reps         INT NOT NULL DEFAULT 0,
-  lapses       INT NOT NULL DEFAULT 0,
-  archived     BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at   TIMESTAMP,
-  UNIQUE KEY uk_lang_word (lang, word)
+-- 语言学习阶段档案（2026-09-12 修订：替代原 vocab_words/review_logs，用户已有其他学习软件）
+CREATE TABLE language_profiles (
+  id         BIGINT PK AUTO_INCREMENT,
+  lang       VARCHAR(8) UNIQUE NOT NULL,      -- en / es
+  level      VARCHAR(50) NOT NULL,            -- 自评阶段，如"中级 B1""入门 A2"
+  goal       TEXT,                            -- 学习目标（可空）
+  note       TEXT,                            -- 备注：在用什么软件、心得等
+  updated_at TIMESTAMP
 );
 
--- 复习记录（统计连续天数、复习量曲线）
-CREATE TABLE review_logs (
-  id          BIGINT PK AUTO_INCREMENT,
-  word_id     BIGINT NOT NULL,               -- FK -> vocab_words.id
-  rating      TINYINT NOT NULL,              -- 1=again 2=hard 3=good 4=easy
-  reviewed_at DATETIME NOT NULL
+-- 学习打卡（每语言每天一条，幂等）
+CREATE TABLE study_logs (
+  id         BIGINT PK AUTO_INCREMENT,
+  lang       VARCHAR(8) NOT NULL,             -- en / es
+  log_date   DATE NOT NULL,
+  note       VARCHAR(200),                    -- 今天学了什么（可选）
+  created_at TIMESTAMP,
+  UNIQUE KEY uk_lang_date (lang, log_date)
 );
 
 -- 训练
@@ -202,7 +197,7 @@ CREATE TABLE habit_logs (
 ```
 认证        POST /api/auth/login                    （保留；register 下线）
 
-Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏、今日待复习数、
+Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏、今日学习打卡状态、
                                                     学习连续天数、本周训练次数、习惯打卡
                                                     状态、收益曲线缩略数据（Redis 缓存 60s）
 
@@ -214,11 +209,12 @@ Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏
             GET             /api/quotes?symbols=    批量实时价（走行情子系统）
             GET             /api/price-history?symbol=&days=
 
-学习        GET/POST        /api/vocab              ?lang=en|es 过滤；POST 支持批量导入
-            PUT/DELETE      /api/vocab/:id
-            GET             /api/review/next?lang=  今日到期队列（due_at <= now，上限 50）
-            POST            /api/review/:id         {rating:1-4}，SM-2 更新 + 写 review_logs
-            GET             /api/review/stats       连续天数、今日/累计复习量
+学习        GET             /api/learn/profiles      两种语言的阶段档案（无记录时返回默认空档案）
+            PUT             /api/learn/profiles/:lang 更新阶段/目标/备注（upsert）
+            POST            /api/learn/checkin       {lang, note?, date?} 当日打卡（幂等）
+            DELETE          /api/learn/checkin       {lang, date?} 撤销打卡
+            GET             /api/learn/stats         连续天数、今日打卡状态、本周/累计打卡数
+            GET             /api/learn/calendar?year= 打卡日历（两语言合并视图）
 
 健身        GET/POST        /api/workouts           列表含 sets；POST 一次提交整场训练
             DELETE          /api/workouts/:id
@@ -233,16 +229,14 @@ Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏
 博客/图库/评论  现有接口全部保留不动
 ```
 
-## 6. SRS 复习算法（SM-2 简化版）
+## 6. 学习模块（简化版，2026-09-12 修订）
 
-对每个词维护 `ease`（初始 2.50）、`interval_days`、`reps`、`lapses`。评分后更新：
+> 修订说明：原设计为生词本 + SM-2 间隔重复复习。用户已有其他语言学习软件，明确"不需要太复杂，只想记录目前什么阶段"。SRS 方案整体废弃，替换为：
 
-- `again(1)`：`interval=0`（10 分钟后再现于本次队列末尾）、`reps=0`、`lapses+1`、`ease=max(1.30, ease-0.20)`
-- `hard(2)`：`interval = max(1, round(interval*1.2))`（首次为 1 天）、`ease=max(1.30, ease-0.15)`
-- `good(3)`：`interval`：0→1 天，1→3 天，之后 `round(interval*ease)`、ease 不变
-- `easy(4)`：`interval`：0→2 天，之后 `round(interval*ease*1.3)`、`ease+=0.15`
-
-`due_at = reviewed_at + interval_days`（`again` 为 +10 分钟）。此纯函数必须有 Go 单元测试覆盖四档评分与边界（ease 下限、interval 上限 365 天）。
+- **阶段档案**：每种语言（英语/西班牙语）一条档案——当前阶段（自评文本，如"中级 B1"）、学习目标、备注（在用什么软件学）。随时可编辑。
+- **每日打卡**：一键记录"今天学了"，可选一句话备注；每语言每天最多一条（幂等，可撤销）。
+- **连续天数**：打卡连续天数 streak 计算为纯函数（按日期序列推导，任意语言打卡即算当天学习），必须有 Go 单元测试。
+- **Dashboard 字段复用**（schema 只增不改）：`learn_streak` = 连续打卡天数；`review_due` = 今日尚未打卡的语言数（0-2）；前端"今日复习"卡文案改为"今日学习"。
 
 ## 7. 前端结构
 
@@ -254,16 +248,16 @@ frontend/src/
 │   ├── layout/                   Sidebar、Topbar、MobileTabBar、CommandPalette
 │   └── charts/                   基于 Recharts 的封装（收益曲线、体重曲线、热力图）
 ├── pages/
-│   ├── Dashboard.tsx             /            4 统计卡 + 收益曲线 + 今日复习入口 + 习惯热力缩略
+│   ├── Dashboard.tsx             /            4 统计卡 + 收益曲线 + 今日学习打卡入口 + 习惯热力缩略
 │   ├── invest/                   /invest      持仓表·流水·录入对话框·收益曲线·占比饼图
-│   ├── learn/                    /learn       生词本(en/es Tab)；/learn/review 卡片翻转+四档评分
+│   ├── learn/                    /learn       语言阶段卡(可编辑)·一键打卡·打卡日历·连续天数
 │   ├── fitness/                  /fitness     训练日志·记录表单·身体曲线·打卡日历
 │   ├── life/                     /life        习惯热力图·随手记·照片墙（复用 gallery API）
 │   ├── blog/                     /blog /blog/:slug /archive 文章列表/详情/归档+评论
 │   ├── Login.tsx
 │   └── admin/                    /admin       写文章（Markdown）+ 各模块数据管理
 ├── lib/api.ts                    fetch 封装（JWT 注入、401 跳登录）
-└── hooks/                        usePositions、useReviewQueue 等 TanStack Query hooks
+└── hooks/                        usePositions 等 TanStack Query hooks
 ```
 
 设计系统（仪表盘风）：
@@ -284,10 +278,10 @@ frontend/src/
 
 - **Go 单元测试**（当前项目零测试，本期只测最值得测的纯逻辑）：
   - 盈亏推导（加权平均成本、部分卖出、清仓、手续费计入）
-  - SM-2 算法（四档评分、ease 下限、interval 上限）
+  - 学习打卡 streak 连续天数计算（修订：替代原 SM-2 算法测试）
   - 积存金换算
 - **前端**：`tsc --noEmit` + `npm run build` 零错误。
-- **冒烟测试**（webapp-testing skill / Playwright）：登录 → 建资产录交易 → 持仓盈亏正确显示 → 加生词 → 完成一次复习 → 习惯打卡出现在热力图。
+- **冒烟测试**（webapp-testing skill / Playwright）：登录 → 建资产录交易 → 持仓盈亏正确显示 → 学习打卡 → 习惯打卡出现在热力图。
 - 每期收尾手动过一遍该期页面（桌面 + 移动视口）。
 
 ## 10. GitHub 上线准备（阶段 0）
@@ -304,7 +298,7 @@ frontend/src/
 | 0 | GitHub 初始化 + 隐私清理 | 私有仓库有首次提交 |
 | 1 | 前端脚手架 + 设计系统 + 布局 + Dashboard 壳 + 博客/图库/评论/登录迁移（功能等价） | 新 UI 跑通现有全部功能 |
 | 2 | 投资模块（assets/trades/positions/行情子系统/收益曲线） | 录交易→实时盈亏→曲线可见 |
-| 3 | 学习模块（vocab + SRS + 复习页 + 统计） | 加词→每日复习→连续天数 |
+| 3 | 学习模块（阶段档案 + 每日打卡 + streak + 日历，简化版） | 编辑阶段→打卡→连续天数可见 |
 | 4 | 健身模块（workouts + body_metrics + 日历） | 记训练→看曲线 |
 | 5 | 生活模块（habits 热力图 + 随手记 + 照片墙升级）+ 全站收尾 | 五大板块完整 |
 
@@ -319,3 +313,4 @@ frontend/src/
 - 移动原生 App（响应式 Web 即可）
 - 公网部署（本期本地跑；架构不阻碍以后上云）
 - 英文/西语界面 i18n（文案集中管理，预留恢复可能）
+- 生词本 / SRS 间隔重复复习 / 复习队列（用户已有其他语言学习软件，网站只做阶段记录与打卡——2026-09-12 修订）
