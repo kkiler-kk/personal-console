@@ -150,7 +150,7 @@ CREATE TABLE habit_logs (
 
 ### 4.1 数据源与降级链
 
-1. **首选 Yahoo Finance 批量行情**（无需 API key）：个股、ETF、`XAUUSD=X`（国际金价 USD/oz）、`CNY=X`（美元兑人民币）。Go 侧处理 crumb/cookie（或使用 `github.com/piquette/finance-go`）。
+1. **首选 Yahoo Finance 行情**（无需 API key，v8 chart 接口）：个股、ETF、`GC=F`（COMEX 黄金期货 USD/oz；原计划的现货 `XAUUSD=X` 已被 Yahoo 下线，2026-09-12 实测 404）、`CNY=X`（美元兑人民币）。
 2. **降级 Stooq 免费 CSV**（`https://stooq.com/q/l/`）：Yahoo 限流或结构变化时兜底。
 3. **最终降级**：返回 `assets.current_price`（最近一次成功值）+ `price_updated_at`，前端灰显"更新于 X 分钟前"。页面永不因行情失败而白屏。
 
@@ -164,7 +164,7 @@ CREATE TABLE habit_logs (
 ### 4.3 银行积存金（人民币/克）
 
 - 建为一个 `price_source=computed_gold_cny` 的特殊资产（symbol 固定 `GOLD_CNY_G`）。
-- 参考价 = `XAUUSD=X ÷ 31.1035（克/盎司）× CNY=X`。
+- 参考价 = `GC=F ÷ 31.1035（克/盎司）× CNY=X`（GC=F 为 COMEX 黄金期货，与现货存在小幅基差，叠加银行点差后仍属"参考价"定位；2026-09-12 修订：原 XAUUSD=X 已被 Yahoo 下线）。
 - 与银行报价存在每克数元以内的点差，属预期；页面标注"参考价"。用户也可将该资产改为 `manual` 手动输价。
 
 ## 5. API 设计

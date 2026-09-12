@@ -529,7 +529,7 @@ cd backend && go build ./... && go vet ./... && go test ./pkg/quote/ -v   # 全�
 
 ```go
 // StooqProvider: GET https://stooq.com/q/l/?s={mapped}&f=sd2t2ohlcv&h&e=csv
-// 映射: 纯字母 symbol → strings.ToLower(sym)+".us"；"XAUUSD=X"→"xauusd"；"CNY=X"→"usdcny"；其余 ErrUnsupported。
+// 映射: 纯字母 symbol → strings.ToLower(sym)+".us"；"GC=F"→"xauusd"（Stooq 现货金，作期货的近似兜底）；"CNY=X"→"usdcny"；其余 ErrUnsupported。
 // CSV 首行表头，第二行: Symbol,Date,Time,Open,High,Low,Close,Volume；price=Close；PreviousClose=0（Stooq 不提供）；
 // Currency: .us→"USD"，xauusd→"USD"，usdcny→"CNY"。Close<=0 或 "N/D" → error。History → ErrUnsupported。
 type StooqProvider struct { client *http.Client; baseURL string }
@@ -537,7 +537,7 @@ func NewStooqProvider(client *http.Client) *StooqProvider
 
 // gold.go
 func ConvertGoldToCNYGram(xauUSDPerOz, usdCNY float64) float64 // = xauUSDPerOz / GramsPerTroyOunce * usdCNY，四舍五入到 2 位小数
-// Service.gold 实现: Quotes 遇到 GoldSymbol 时——provider 链 Fetch("XAUUSD=X") 与 Fetch("CNY=X")（各自走缓存），
+// Service.gold 实现: Quotes 遇到 GoldSymbol 时——provider 链 Fetch("GC=F") 与 Fetch("CNY=X")（各自走缓存；GC=F 为 COMEX 期货，Yahoo 现货 XAUUSD=X 已下线——2026-09-12 实测），
 // 两者都成功: Price=ConvertGoldToCNYGram(...)，PreviousClose=ConvertGoldToCNYGram(prevXAU, prevCNY)（任一 prev<=0 则 0），Currency="CNY"，缓存同普通 symbol；
 // 任一失败: 走 assets 兜底（与普通 symbol 相同路径）。
 ```
