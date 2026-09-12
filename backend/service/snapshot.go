@@ -22,9 +22,10 @@ const snapshotCronSpec = "0 6 * * *"
 // 若当前北京时间已过今天 06:00 且存在任一自动跟踪资产（yahoo/computed_gold_cny）
 // 今日无快照行，则补跑 RunSnapshot 一次（goroutine 内执行，不阻塞启动，recover 兜底）。
 // 返回已 Start 的 cron 句柄，调用方负责 Stop（通常 main 里 defer）。
-// 定时任务由 cron v3 默认链的 Recover 包装；补跑 goroutine 自带 recover。
+// cron v3.0.1 的 New() 默认链为空、startJob 裸跑 j.Run()（无 recover），
+// 故显式 WithChain(Recover) 保护定时任务；补跑 goroutine 自带 recover。
 func StartSnapshotScheduler(ctx context.Context, db *sqlx.DB, qs *quote.Service) *cron.Cron {
-	c := cron.New(cron.WithLocation(snapshotLoc))
+	c := cron.New(cron.WithLocation(snapshotLoc), cron.WithChain(cron.Recover(cron.DefaultLogger)))
 	if _, err := c.AddFunc(snapshotCronSpec, func() {
 		RunSnapshot(ctx, db, qs)
 	}); err != nil {
