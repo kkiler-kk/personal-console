@@ -1,4 +1,4 @@
-// 阶段冒烟测试：真实浏览器跑通「未登录跳转 → 登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路 → 学习链路」九步链路。
+// 阶段冒烟测试：真实浏览器跑通「未登录跳转 → 登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路 → 学习链路 → 习惯链路」十步链路。
 // 用法：SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs
 // 可选：BASE_URL 覆盖前端地址（默认 http://localhost:3000）
 import { chromium } from "playwright"
@@ -134,6 +134,40 @@ try {
   if (!del.ok()) console.error(`WARN: cleanup learn session ${sessionId} failed: ${del.status()}`)
 }
 console.log("STEP9 LEARN PASS")
+
+// 10. 习惯链路：建习惯 → 打卡 → 热力图含今天 → /life 页面断言 → 清理（复用第 8 步 auth 登录态）
+// check/uncheck 显式传 date=today（与第 9 步同一本地日期口径），断言与清理都确定性强
+let habitId = null
+let habitChecked = false
+try {
+  const created = await page.request.post(BASE + "/api/habits", {
+    headers: auth,
+    data: { name: "冒烟习惯" },
+  })
+  if (!(created.status() === 201 || created.ok())) throw new Error("create habit failed: " + created.status())
+  habitId = (await created.json()).id
+  const ck = await page.request.post(BASE + `/api/habits/${habitId}/check`, { headers: auth, data: { date: today } })
+  if (!ck.ok()) throw new Error("check habit failed: " + ck.status())
+  habitChecked = true
+  const hm = await (await page.request.get(BASE + `/api/habits/heatmap?year=${now.getFullYear()}`, { headers: auth })).json()
+  const cell = hm.days.find((d) => d.date === today)
+  // 断言真实：今天必须在热力图中且 count>=1（当天若有用户真实打卡只会更大）
+  if (!cell || cell.count < 1) throw new Error("heatmap missing today: " + JSON.stringify(hm.days))
+  // 页面断言用 h1 精确选择器（text=生活 会误中侧边栏导航，阶段 1 教训）
+  await page.goto(BASE + "/life", { waitUntil: "networkidle" })
+  await page.waitForSelector('h1:has-text("生活")', { timeout: 10_000 })
+} finally {
+  // 清理：撤销打卡 → 删习惯（删习惯会级联清 habit_logs，先撤销保证任一步失败也不留痕）
+  if (habitId != null && habitChecked) {
+    const uc = await page.request.delete(BASE + `/api/habits/${habitId}/check`, { headers: auth, data: { date: today } })
+    if (!uc.ok()) console.error(`WARN: uncheck habit ${habitId} failed: ${uc.status()}`)
+  }
+  if (habitId != null) {
+    const dh = await page.request.delete(BASE + `/api/habits/${habitId}`, { headers: auth })
+    if (!dh.ok()) console.error(`WARN: cleanup habit ${habitId} failed: ${dh.status()}`)
+  }
+}
+console.log("STEP10 HABIT PASS")
 
 if (errors.length) throw new Error("页面 JS 错误:\n" + errors.join("\n"))
 console.log("SMOKE PASS ✅")

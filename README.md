@@ -1,6 +1,6 @@
 # KK 控制台（个人博客系统）
 
-单用户的个人控制台网站：以工具为主、文章次要。前端使用 React（TypeScript），后端使用 Go，数据库使用 MySQL，缓存使用 Redis。现有博客功能（文章/分类/标签/归档/评论/照片墙）已全部迁移至新 UI，其余板块按分期逐步上线。
+单用户的个人控制台网站：以工具为主、文章次要。前端使用 React（TypeScript），后端使用 Go，数据库使用 MySQL，缓存使用 Redis。全站四大板块（投资/学习/生活/博客）已全部交付：博客功能（文章/分类/标签/归档/评论/照片墙）自旧站等价迁移，投资/学习/生活模块按阶段 2/3/4 依次上线。
 
 ## 板块
 
@@ -8,10 +8,10 @@
 | -------- | ---------------------------------------- | -------------------------------------- |
 | 📈 投资 | 美股/A 股个股、ETF、银行积存金的持仓与盈亏跟踪 | 已上线（阶段 2）                       |
 | 🗣️ 学习 | 英语/西班牙语学习阶段记录 + 每日打卡（简化版，不做生词本/SRS） | 已上线（阶段 3）                       |
-| 🌱 生活 | 习惯打卡热力图、随手记、照片墙            | 照片墙已上线（阶段 1），完整版见阶段 4 |
+| 🌱 生活 | 习惯打卡热力图、随手记、照片墙            | 已上线（阶段 4，照片墙阶段 1 先行）    |
 | ✍️ 博客 | 文章/分类/标签/归档/评论系统              | 已完成（阶段 1）                       |
 
-分期进度：阶段 0（仓库初始化 + 隐私清理）、阶段 1（控制台壳 + 博客/图库/评论/登录功能等价迁移）、阶段 2（投资模块）、阶段 3（学习模块）已完成；健身板块已取消（2026-09-12 用户决定，健身内容可作为博客分类存在）；阶段 4（生活模块 + 全站收尾）待做，详见 `docs/superpowers/specs/2026-09-12-personal-site-redesign-design.md`。
+分期进度：阶段 0（仓库初始化 + 隐私清理）、阶段 1（控制台壳 + 博客/图库/评论/登录功能等价迁移）、阶段 2（投资模块）、阶段 3（学习模块）、阶段 4（生活模块 + 全站收尾）已全部完成——**全站四大板块（投资/学习/生活/博客）交付完毕**；健身板块已取消（2026-09-12 用户决定，健身内容可作为博客分类存在）。设计文档见 `docs/superpowers/specs/2026-09-12-personal-site-redesign-design.md`。
 
 ## 技术栈
 
@@ -59,7 +59,8 @@ blogs/
 │   │   ├── asset.go            # 资产 CRUD + 手动改价
 │   │   ├── trade.go            # 交易流水 CRUD（超卖校验）
 │   │   ├── invest.go           # 持仓/行情/价格历史/收益曲线
-│   │   └── learn.go            # 语言档案 + 学习记录 + 统计 + 打卡日历
+│   │   ├── learn.go            # 语言档案 + 学习记录 + 统计 + 打卡日历
+│   │   └── habit.go            # 习惯 CRUD + 打卡/撤销 + 年度热力图
 │   ├── middleware/
 │   │   └── auth.go             # JWT 认证中间件
 │   ├── model/
@@ -81,7 +82,7 @@ blogs/
     ├── components.json         # shadcn/ui 配置
     ├── index.html
     ├── scripts/
-    │   └── smoke.mjs           # Playwright 冒烟测试（九步链路）
+    │   └── smoke.mjs           # Playwright 冒烟测试（十步链路）
     └── src/
         ├── main.tsx            # 入口
         ├── App.tsx             # 路由
@@ -89,23 +90,25 @@ blogs/
         ├── components/
         │   ├── ui/             # shadcn/ui 基础组件
         │   ├── layout/         # 侧边栏/顶栏/移动端 Tab/命令面板
-        │   ├── charts/         # Recharts 封装（收益曲线 ValueChart）
-        │   └── blog/           # 文章卡片/评论区/Markdown/分页
+        │   ├── charts/         # Recharts/自绘封装（收益曲线 ValueChart、学习柱状 MinutesBar、习惯热力图 HabitHeatmap）
+        │   ├── blog/           # 文章卡片/评论区/Markdown/分页
+        │   └── ErrorState.tsx  # 全站统一错误态（图标 + 文案 + 可选重试）
         ├── context/
         │   ├── AuthContext.tsx # 认证状态
         │   └── ThemeContext.tsx # 深浅色主题
         ├── lib/
         │   ├── api.ts          # fetch 封装（token 注入 + 401 处理）
         │   ├── types.ts        # 共享类型
-        │   └── format.ts       # 格式化工具
+        │   ├── format.ts       # 格式化工具
+        │   └── dates.ts        # 日期工具（compact 热力图 16 周窗口起点，Dashboard/热力图共享）
         └── pages/
-            ├── Dashboard.tsx   # 首页仪表盘（统计卡 + 收益曲线）
+            ├── Dashboard.tsx   # 首页仪表盘（统计卡 + 收益曲线 + 习惯迷你热力图）
             ├── Login.tsx       # 登录
             ├── invest/         # 投资页（持仓/交易/曲线/资产对话框）
             ├── learn/          # 学习页（阶段档案/记录学习/统计图表/打卡日历）
             ├── blog/           # 文章列表/详情/归档/分类/标签
             ├── admin/          # 文章管理/分类管理/编辑器
-            └── life/           # 生活页（照片墙）
+            └── life/           # 生活页（习惯打卡热力图/随手记/照片墙灯箱）
 ```
 
 ## 快速开始
@@ -161,7 +164,7 @@ npm run dev
 
 ### 4. 冒烟测试（可选）
 
-全栈跑起来后执行：`SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs`，九步链路（含评论发→删、投资链路：建资产→录交易→持仓校验→清理、学习链路：记录时长→统计校验→/learn 页面→清理）全过输出 `STEP8 INVEST PASS` + `STEP9 LEARN PASS` + `SMOKE PASS ✅`。
+全栈跑起来后执行：`SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs`，十步链路（含评论发→删、投资链路：建资产→录交易→持仓校验→清理、学习链路：记录时长→统计校验→/learn 页面→清理、习惯链路：建习惯→打卡→热力图含今天→/life 页面→清理）全过输出 `STEP8 INVEST PASS` + `STEP9 LEARN PASS` + `STEP10 HABIT PASS` + `SMOKE PASS ✅`。
 
 ## API 文档
 
@@ -197,7 +200,7 @@ npm run dev
 | POST   | /api/upload                | 上传图片           |
 | GET    | /api/gallery               | 照片墙列表         |
 | DELETE | /api/gallery/:filename     | 删除照片           |
-| GET    | /api/dashboard/summary     | 控制台统计摘要（含 learn_streak/review_due/study_minutes_today 学习字段） |
+| GET    | /api/dashboard/summary     | 控制台统计摘要（含 learn_streak/review_due/study_minutes_today 学习字段与 habits_checked_today/habits_total 习惯字段） |
 
 ### 投资接口（需认证 Bearer Token）
 
@@ -226,6 +229,20 @@ npm run dev
 | DELETE | /api/learn/sessions/:id       | 删除一条学习记录（不存在返回 404）                 |
 | GET    | /api/learn/stats              | 统计（streak/今日/本周/累计/分语言/近 28 天逐日）   |
 | GET    | /api/learn/calendar?year=     | 年度打卡日历（仅返回有记录的日期；year 默认当年）   |
+
+### 生活接口（需认证 Bearer Token）
+
+| 方法   | 路径                          | 说明                                             |
+| ------ | ----------------------------- | ------------------------------------------------ |
+| GET    | /api/habits                   | 习惯列表（每行含 `checked_today` 当日打卡状态；`?all=1` 含归档） |
+| POST   | /api/habits                   | 创建习惯（name 必填，icon/color 可选）             |
+| PUT    | /api/habits/:id               | 更新习惯（合并语义：只改传入字段；支持 `archived` 归档） |
+| DELETE | /api/habits/:id               | 删除习惯（级联删除其打卡记录；不存在返回 404）     |
+| POST   | /api/habits/:id/check         | 打卡（body `date?` 缺省今天，幂等：重复打卡仍 200） |
+| DELETE | /api/habits/:id/check         | 撤销打卡（body `date?` 缺省今天；当日无记录返回 404） |
+| GET    | /api/habits/heatmap?year=     | 年度打卡热力图（仅返回有打卡的日期；year 默认当年，clamp 2000–2100） |
+
+> 随手记无独立端点：复用 `POST /api/posts` + 分类 `slug=notes`（建表时自动种子），列表走公开接口 `GET /api/posts?category=notes`。
 
 ### 请求示例
 
@@ -390,25 +407,45 @@ KEY idx_session_date (session_date)
 KEY idx_lang_date (lang, session_date)
 ```
 
+### habits / habit_logs 表（生活模块，阶段 4）
+```sql
+-- habits：习惯定义（icon/color 可空，查询侧 IFNULL 兜底）
+id         BIGINT PK AUTO_INCREMENT
+name       VARCHAR(50) NOT NULL
+icon       VARCHAR(16) (可空)      -- emoji 图标
+color      VARCHAR(16) (可空)      -- 主题色
+archived   BOOLEAN NOT NULL DEFAULT FALSE   -- 归档（软隐藏，历史打卡保留）
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+-- habit_logs：打卡记录（一天一习惯一行，复合主键天然幂等，INSERT IGNORE 打卡）
+habit_id BIGINT NOT NULL
+log_date DATE NOT NULL            -- 打卡日期（「今天」一律 Go 本地日期传参，不用 CURDATE()）
+PRIMARY KEY (habit_id, log_date)
+```
+
+> 随手记不落新表：复用 `posts` 表 + `categories` 中 `slug=notes` 的种子分类（建表时 `INSERT IGNORE` 写入，section=life）。
+
 ## 功能特性
 
-- **控制台 Dashboard**：统计卡（投资组合/今日学习分钟数/习惯/文章/评论/照片）+ 近 30 天收益曲线
+- **控制台 Dashboard**：统计卡（投资组合/今日学习分钟数/习惯/文章/评论/照片）+ 近 30 天收益曲线 + 习惯近 16 周迷你热力图
 - **投资组合**：资产/交易流水/加权平均成本持仓盈亏（CNY 汇总，美元资产按实时汇率折算）；银行积存金按 `GC=F ÷ 31.1035 × USDCNY` 换算克价
 - **行情三级降级**：Yahoo → Stooq → 本地兜底价（标记 stale），页面永不因行情失败而不可用；Redis 缓存 60 秒
 - **PE(TTM) 与 A 股**：持仓含 PE(TTM)（Yahoo 基本面，1h 缓存，失败恒 null 不阻塞）；支持 A 股（.SS/.SZ 后缀，CNY 计价）
 - **每日快照**：robfig/cron 每日 06:00（北京时间）快照自动跟踪资产（Yahoo/积存金）价格，启动时补跑漏掉的快照；创建自动跟踪资产时异步回填一年历史；收益曲线由快照收盘价 + 交易流水推导
 - **学习模块**：英语/西班牙语阶段档案（自评阶段/目标/备注，随时编辑）；按活动类型（背单词/听力/口语/阅读/语法/其他）记录学习时长；统计五件套（连续天数 streak/今日/本周/累计/分语言）+ 近 28 天柱状图 + 年度打卡日历；快速打卡（0 分钟记录标记「今天学过」）
+- **习惯打卡**：习惯 CRUD + 归档；年度打卡热力图（GitHub 风，仅渲染有记录的日期）；当日打卡状态由服务端驱动（列表行级 `checked_today` 字段，前端不做本地推导）；Dashboard 复用近 16 周 compact 热力缩略
+- **随手记**：生活页轻量输入框，复用博客 `posts` 表 + `notes` 种子分类（自动建、可跳转分类页查看更多）；种子分类被删时优雅降级为禁用 + 提示
 - **文章管理**：Markdown 编辑器（图片上传 + 预览），草稿/发布状态
 - **分类系统**：文章可按分类浏览，分类带 `section` 字段归属五大板块
 - **标签系统**：文章可打多个标签，支持按标签筛选
 - **时间归档**：按年月分组展示文章归档
 - **评论系统**：嵌套回复 + 点赞；评论凭邮箱识别，评论者可删除自己的评论，管理员登录后亦可删除
-- **照片墙**：生活页图库，管理端上传/删除
+- **照片墙**：生活页图库（灯箱放大浏览 + 键盘导航），管理端上传/删除
 - **浏览量统计**：每次访问文章自动增加浏览量
 - **Redis 缓存**：文章列表、分类、标签数据缓存 5-30 分钟
 - **JWT 认证**：登录签发 Token，有效期 72 小时（注册已下线，单用户）
 - **深浅色主题**：仪表盘风 UI，支持明暗切换；移动端底部 Tab 导航
-- **冒烟测试**：Playwright 脚本九步链路：登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路（建资产/录交易/持仓校验/清理）→ 学习链路（记录时长/统计校验/页面断言/清理）
+- **冒烟测试**：Playwright 脚本十步链路：登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路（建资产/录交易/持仓校验/清理）→ 学习链路（记录时长/统计校验/页面断言/清理）→ 习惯链路（建习惯/打卡/热力图含今天/页面断言/清理）
 
 ## 环境变量配置
 
