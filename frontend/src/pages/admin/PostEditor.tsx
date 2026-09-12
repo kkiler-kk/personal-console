@@ -31,7 +31,7 @@ export default function PostEditor() {
 
   const { data: cats } = useQuery({ queryKey: ["categories"], queryFn: api.getCategories })
   const { data: adminPosts } = useQuery({
-    queryKey: ["admin-posts-all"], queryFn: () => api.getAdminPosts({ page: 1, size: 200 }), enabled: editing,
+    queryKey: ["admin-posts", "all"], queryFn: () => api.getAdminPosts({ page: 1, size: 200 }), enabled: editing,
   })
   useEffect(() => {
     if (!editing || !adminPosts) return
@@ -55,7 +55,7 @@ export default function PostEditor() {
     },
     onSuccess: () => {
       toast.success(editing ? "已更新" : "已创建")
-      // 前缀匹配：同时失效 ["admin-posts", page] 与 ["admin-posts-all"]；前台列表 ["posts", …] 一并失效
+      // 前缀失效 ["admin-posts", page] 与 ["admin-posts", "all"]（编辑器回填数据）；前台列表 ["posts", …] 一并失效
       qc.invalidateQueries({ queryKey: ["admin-posts"] })
       qc.invalidateQueries({ queryKey: ["posts"] })
       navigate("/admin/posts")
