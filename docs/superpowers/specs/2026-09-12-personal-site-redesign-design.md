@@ -1,6 +1,6 @@
 # 个人控制台网站重构设计
 
-日期：2026-09-12（同日修订：学习模块简化，废弃生词本/SRS）
+日期：2026-09-12（同日修订 ×2：学习模块简化，废弃生词本/SRS；健身模块整体取消）
 状态：已与用户对齐，阶段 1 已按此交付
 目标读者：本仓库的实施者（Claude / 用户本人）
 
@@ -14,9 +14,10 @@
 |---|---|---|
 | 📈 投资 | 美股个股、ETF（如 QQQ）、银行积存金（按克/人民币）的持仓与盈亏跟踪 | 工具 |
 | 🗣️ 学习 | 英语/西班牙语**学习阶段记录 + 每日打卡**（用户已有其他语言学习软件，不做生词本/SRS——2026-09-12 修订） | 轻工具 |
-| 💪 健身 | 训练日志、身体数据曲线、打卡日历 | 工具 |
 | 🌱 生活 | 习惯打卡热力图、随手记、照片墙 | 工具 + 内容 |
 | ✍️ 博客 | 现有文章/分类/标签/归档/评论系统，保留并重做样式 | 内容 |
+
+> ~~💪 健身（训练日志、身体数据曲线、打卡日历）~~ —— **2026-09-12 用户决定取消**：不建健身模块，前端导航同步移除该板块；健身相关内容可作为博客分类存在。`workouts/workout_sets/body_metrics` 表不再创建；dashboard summary 的 `workouts_this_week` 字段按"只增不改"原则保留、恒为 0，前端不再展示。
 
 约束与决策（用户已确认）：
 
@@ -116,31 +117,7 @@ CREATE TABLE study_logs (
   UNIQUE KEY uk_lang_date (lang, log_date)
 );
 
--- 训练
-CREATE TABLE workouts (
-  id         BIGINT PK AUTO_INCREMENT,
-  trained_at DATE NOT NULL,
-  title      VARCHAR(100),                   -- 如"推日""腿日"
-  note       TEXT,
-  created_at TIMESTAMP
-);
-CREATE TABLE workout_sets (
-  id         BIGINT PK AUTO_INCREMENT,
-  workout_id BIGINT NOT NULL,                -- FK -> workouts.id
-  set_order  INT NOT NULL,
-  exercise   VARCHAR(100) NOT NULL,          -- 如"卧推""深蹲"
-  weight_kg  DECIMAL(8,2),
-  reps       INT
-);
-
--- 身体数据（每日一行）
-CREATE TABLE body_metrics (
-  id           BIGINT PK AUTO_INCREMENT,
-  recorded_at  DATE UNIQUE NOT NULL,
-  weight_kg    DECIMAL(6,2),
-  body_fat_pct DECIMAL(5,2),
-  note         TEXT
-);
+-- 训练/身体数据表已取消（2026-09-12 用户决定不做健身模块）
 
 -- 习惯与打卡
 CREATE TABLE habits (
@@ -198,8 +175,9 @@ CREATE TABLE habit_logs (
 认证        POST /api/auth/login                    （保留；register 下线）
 
 Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏、今日学习打卡状态、
-                                                    学习连续天数、本周训练次数、习惯打卡
-                                                    状态、收益曲线缩略数据（Redis 缓存 60s）
+                                                    学习连续天数、习惯打卡状态、收益曲线缩略数据
+                                                    （Redis 缓存 60s；workouts_this_week 字段
+                                                    按"只增不改"保留恒 0，前端不展示）
 
 投资        GET/POST        /api/assets             资产列表/新增
             PUT/DELETE      /api/assets/:id
@@ -216,10 +194,7 @@ Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏
             GET             /api/learn/stats         连续天数、今日打卡状态、本周/累计打卡数
             GET             /api/learn/calendar?year= 打卡日历（两语言合并视图）
 
-健身        GET/POST        /api/workouts           列表含 sets；POST 一次提交整场训练
-            DELETE          /api/workouts/:id
-            GET/POST/PUT    /api/body-metrics       按日期 upsert
-            GET             /api/workouts/calendar?year=&month=  打卡日历
+健身        ——已取消（2026-09-12 用户决定，无健身端点）
 
 生活        GET/POST        /api/habits
             PUT/DELETE      /api/habits/:id
@@ -251,7 +226,7 @@ frontend/src/
 │   ├── Dashboard.tsx             /            4 统计卡 + 收益曲线 + 今日学习打卡入口 + 习惯热力缩略
 │   ├── invest/                   /invest      持仓表·流水·录入对话框·收益曲线·占比饼图
 │   ├── learn/                    /learn       语言阶段卡(可编辑)·一键打卡·打卡日历·连续天数
-│   ├── fitness/                  /fitness     训练日志·记录表单·身体曲线·打卡日历
+│   ├── （fitness 已取消，导航与路由移除）
 │   ├── life/                     /life        习惯热力图·随手记·照片墙（复用 gallery API）
 │   ├── blog/                     /blog /blog/:slug /archive 文章列表/详情/归档+评论
 │   ├── Login.tsx
@@ -299,8 +274,8 @@ frontend/src/
 | 1 | 前端脚手架 + 设计系统 + 布局 + Dashboard 壳 + 博客/图库/评论/登录迁移（功能等价） | 新 UI 跑通现有全部功能 |
 | 2 | 投资模块（assets/trades/positions/行情子系统/收益曲线） | 录交易→实时盈亏→曲线可见 |
 | 3 | 学习模块（阶段档案 + 每日打卡 + streak + 日历，简化版） | 编辑阶段→打卡→连续天数可见 |
-| 4 | 健身模块（workouts + body_metrics + 日历） | 记训练→看曲线 |
-| 5 | 生活模块（habits 热力图 + 随手记 + 照片墙升级）+ 全站收尾 | 五大板块完整 |
+| 4 | ~~健身模块~~ **已取消**（2026-09-12 用户决定；导航/路由/卡片移除并入阶段 2 收尾执行） | — |
+| 5 | 生活模块（habits 热力图 + 随手记 + 照片墙升级）+ 全站收尾 | 四大板块完整（投资/学习/生活/博客） |
 
 每期独立走 spec→plan→实现→测试→提交；本文件为总设计，各期细节在实施计划中展开。
 
@@ -314,3 +289,4 @@ frontend/src/
 - 公网部署（本期本地跑；架构不阻碍以后上云）
 - 英文/西语界面 i18n（文案集中管理，预留恢复可能）
 - 生词本 / SRS 间隔重复复习 / 复习队列（用户已有其他语言学习软件，网站只做阶段记录与打卡——2026-09-12 修订）
+- 健身模块：训练日志/身体数据/打卡日历（2026-09-12 用户决定取消；健身内容可作为博客分类存在）

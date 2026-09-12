@@ -1072,10 +1072,17 @@ git add frontend/src   # 显式
 git commit -m "feat(frontend): invest page — positions, trades, charts, asset dialogs"
 ```
 
-### Task 2.10: Dashboard 接线 + 冒烟第 8 步 + 文档 + 收尾
+### Task 2.10: Dashboard 接线 + 健身板块移除 + 冒烟第 8 步 + 文档 + 收尾
 
 **Files:**
-- Modify: `frontend/src/pages/Dashboard.tsx`、`frontend/scripts/smoke.mjs`、`README.md`、`CLAUDE.md`、`backend/.env.example`（若 2.1 未加）
+- Modify: `frontend/src/pages/Dashboard.tsx`、`frontend/src/components/layout/Sidebar.tsx`、`frontend/src/App.tsx`、`frontend/scripts/smoke.mjs`、`README.md`、`CLAUDE.md`、`backend/.env.example`（若 2.1 未加）
+
+> **2026-09-12 修订（用户决定）**：健身模块取消。本任务追加 Step 0：
+> - `Sidebar.tsx` NAV_ITEMS 删除 `{ to: "/fitness", label: "健身", icon: Dumbbell }` 项与 Dumbbell import
+> - `App.tsx` 删除 `/fitness` 路由行与 Dumbbell import（PagePlaceholder 仍被 /learn 使用，保留）
+> - `Dashboard.tsx` 删除「本周训练」StatCard 与 Dumbbell import（后端 workouts_this_week 字段按 schema 只增不改保留，前端不再消费）
+> - MobileTabBar/CommandPalette 消费 NAV_ITEMS 自动生效，无需改
+> - 验证 `grep -rn fitness frontend/src` 仅剩合理残留（如无则零匹配）
 
 **Interfaces:**
 - Consumes: api.getPositions/getPositionsHistory、ValueChart
