@@ -15,7 +15,7 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins:     []string{"http://localhost:3000", "http://127.0.0.1:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		AllowCredentials: true,
@@ -29,6 +29,7 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 	uh2 := handler.NewUploadHandler()
 	gh := handler.NewGalleryHandler()
 	cmth := handler.NewCommentHandler(cfg, db)
+	dh := handler.NewDashboardHandler(db, rdb)
 	auth := middleware.AuthMiddleware(cfg.JWTSecret)
 
 	// serve uploaded files
@@ -38,7 +39,6 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 	api := r.Group("/api")
 	{
 		// auth
-		api.POST("/auth/register", uh.Register)
 		api.POST("/auth/login", uh.Login)
 
 		// posts (public)
@@ -85,6 +85,9 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 		// gallery (admin)
 		protected.GET("/gallery", gh.List)
 		protected.DELETE("/gallery/:filename", gh.Delete)
+
+		// dashboard
+		protected.GET("/dashboard/summary", dh.Summary)
 	}
 
 	return r
