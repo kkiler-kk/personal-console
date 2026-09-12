@@ -30,7 +30,6 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 	uh2 := handler.NewUploadHandler()
 	gh := handler.NewGalleryHandler()
 	cmth := handler.NewCommentHandler(cfg, db)
-	dh := handler.NewDashboardHandler(db, rdb)
 	auth := middleware.AuthMiddleware(cfg.JWTSecret)
 
 	// invest: quote.Service 构造一次，由 asset/invest handler 共享
@@ -38,6 +37,9 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 	ah := handler.NewAssetHandler(db, qs, rdb)
 	trh := handler.NewTradeHandler(db, rdb)
 	ih := handler.NewInvestHandler(db, qs)
+
+	// dashboard 复用 InvestHandler 的实时持仓计算，须在 ih 之后构造
+	dh := handler.NewDashboardHandler(db, rdb, ih)
 
 	// serve uploaded files
 	r.Static("/uploads", "./uploads")

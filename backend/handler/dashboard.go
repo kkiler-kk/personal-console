@@ -19,10 +19,11 @@ type DashboardHandler struct {
 	db        *sqlx.DB
 	redis     *redis.Client
 	uploadDir string
+	invest    *InvestHandler
 }
 
-func NewDashboardHandler(db *sqlx.DB, rdb *redis.Client) *DashboardHandler {
-	return &DashboardHandler{db: db, redis: rdb, uploadDir: "./uploads"}
+func NewDashboardHandler(db *sqlx.DB, rdb *redis.Client, invest *InvestHandler) *DashboardHandler {
+	return &DashboardHandler{db: db, redis: rdb, uploadDir: "./uploads", invest: invest}
 }
 
 type dashboardSummary struct {
@@ -65,7 +66,20 @@ func (h *DashboardHandler) Summary(c *gin.Context) {
 			}
 		}
 	}
-	// tool modules land in phases 2-5; fields stay zero/null until then
+	// invest portfolio: reuse live positions computation (Task 2.5).
+	// On error keep the three fields nil; other summary fields unaffected.
+	// Note: quotes failure does NOT error here (fallback prices), so fields
+	// may carry Stale-priced values.
+	if pos, err := h.invest.ComputePositionsResponse(c.Request.Context()); err != nil {
+		log.Printf("dashboard: positions unavailable: %v", err)
+	} else if len(pos.Positions) > 0 {
+		v := pos.Summary.TotalValueCNY
+		pnl := pos.Summary.TotalPnlCNY
+		pct := pos.Summary.TotalPnlPct
+		s.PortfolioValue = &v
+		s.PortfolioPnl = &pnl
+		s.PortfolioPnlPct = &pct
+	}
 
 	resp, _ := json.Marshal(s)
 	h.redis.Set(context.Background(), cacheKey, resp, 60*time.Second)
