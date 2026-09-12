@@ -135,6 +135,7 @@ export default function InvestPage() {
                 <TableHead className="text-right">均价</TableHead>
                 <TableHead className="text-right">现价</TableHead>
                 <TableHead className="text-right">日涨跌</TableHead>
+                <TableHead className="text-right">PE(TTM)</TableHead>
                 <TableHead className="text-right">市值</TableHead>
                 <TableHead className="text-right">浮动盈亏</TableHead>
                 <TableHead className="text-right">已实现</TableHead>
@@ -143,7 +144,7 @@ export default function InvestPage() {
             </TableHeader>
             <TableBody>
               {positions.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-10">还没有资产，点右上角「添加资产」开始</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-10">还没有资产，点右上角「添加资产」开始</TableCell></TableRow>
               ) : positions.map((p) => {
                 const a = p.asset
                 const invalid = p.invalid === true
@@ -180,6 +181,7 @@ export default function InvestPage() {
                     <TableCell className={`text-right tnum ${pnlCls(p.day_change_pct)}`}>
                       {p.day_change_pct != null ? signedPct(p.day_change_pct) : "—"}
                     </TableCell>
+                    <TableCell className="text-right tnum">{p.pe_ttm != null ? p.pe_ttm.toFixed(1) : "—"}</TableCell>
                     <TableCell className="text-right tnum">{p.market_value != null ? formatMoney(p.market_value, a.currency) : "—"}</TableCell>
                     <TableCell className={`text-right tnum ${pnlCls(p.unrealized_pnl)}`}>
                       {p.unrealized_pnl != null ? signedMoney(p.unrealized_pnl, a.currency) : "—"}

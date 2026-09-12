@@ -38,7 +38,7 @@ export interface PositionRow {
   asset: Asset; quantity: number; avg_cost: number; cost_basis: number
   market_value: number | null; realized_pnl: number; unrealized_pnl: number | null
   price: number | null; previous_close: number | null; day_change_pct: number | null
-  stale: boolean; price_updated_at: string | null
+  pe_ttm: number | null; stale: boolean; price_updated_at: string | null
   invalid?: boolean
 }
 export interface PositionsSummary {

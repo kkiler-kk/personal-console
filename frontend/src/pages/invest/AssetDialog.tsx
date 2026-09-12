@@ -10,12 +10,15 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
-type Preset = "us" | "gold" | "manual"
+type Preset = "us" | "ashare" | "gold" | "manual"
 
 const GOLD_SYMBOL = "GOLD_CNY_G"
+// A 股代码形态轻校验：仅 toast 提示，不阻塞提交（后端与 Yahoo 才是权威）
+const ASHARE_SYMBOL_RE = /^\d{6}\.(SS|SZ)$/i
 
 const PRESETS: { value: Preset; label: string; hint: string }[] = [
   { value: "us", label: "美股 / ETF", hint: "Yahoo 自动报价 · USD" },
+  { value: "ashare", label: "A 股", hint: "Yahoo 自动报价 · CNY" },
   { value: "gold", label: "银行积存金", hint: "系统计算金价 · CNY" },
   { value: "manual", label: "手动资产", hint: "手动维护现价" },
 ]
@@ -47,6 +50,8 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
       setName((n) => n.trim() === "" ? "银行积存金" : n)
     } else if (p === "us") {
       setType("stock"); setCurrency("USD")
+    } else if (p === "ashare") {
+      setType("stock"); setCurrency("CNY")
     }
   }
 
@@ -56,6 +61,12 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
         return api.createAsset({
           symbol: GOLD_SYMBOL, name: name.trim() || "银行积存金",
           type: "metal", price_source: "computed_gold_cny", currency: "CNY",
+        })
+      }
+      if (preset === "ashare") {
+        return api.createAsset({
+          symbol: symbol.trim().toUpperCase(), name: name.trim(),
+          type: "stock", price_source: "yahoo", currency: "CNY",
         })
       }
       if (preset === "us") {
@@ -80,6 +91,14 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
   const nameOk = preset === "gold" || name.trim().length > 0
   const canSubmit = symbolOk && nameOk && !create.isPending
 
+  // A 股代码提交前轻校验：形态不符仅 toast 提示，不 return（后端仍是权威）
+  const handleSubmit = () => {
+    if (preset === "ashare" && !ASHARE_SYMBOL_RE.test(symbol.trim())) {
+      toast.warning("A 股代码通常为 600519.SS（沪）/ 000001.SZ（深），已按原样提交")
+    }
+    create.mutate()
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset() }}>
       <DialogTrigger asChild>
@@ -92,7 +111,7 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {PRESETS.map((p) => (
               <label key={p.value}
                 className={`cursor-pointer rounded-lg border p-2.5 text-center transition-colors ${preset === p.value ? "border-primary bg-accent" : "border-border hover:bg-muted/50"}`}>
@@ -109,7 +128,7 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
             {preset === "gold" ? (
               <Input id="asset-symbol" value={GOLD_SYMBOL} readOnly className="bg-muted text-muted-foreground" />
             ) : (
-              <Input id="asset-symbol" placeholder={preset === "us" ? "如 AAPL、VOO" : "自定义代码"}
+              <Input id="asset-symbol" placeholder={preset === "us" ? "美股如 AAPL；ETF 如 QQQ" : preset === "ashare" ? "600519.SS（沪）/ 000001.SZ（深）" : "自定义代码"}
                 value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} />
             )}
           </div>
@@ -123,10 +142,10 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>类型</Label>
-              <Select value={type} onValueChange={(v) => setType(v as AssetType)} disabled={preset === "gold"}>
+              <Select value={type} onValueChange={(v) => setType(v as AssetType)} disabled={preset === "gold" || preset === "ashare"}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(preset === "us" ? US_TYPES : ALL_TYPES).map((t) => (
+                  {(preset === "us" || preset === "ashare" ? US_TYPES : ALL_TYPES).map((t) => (
                     <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -157,7 +176,7 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => { setOpen(false); reset() }}>取消</Button>
-          <Button disabled={!canSubmit} onClick={() => create.mutate()}>
+          <Button disabled={!canSubmit} onClick={handleSubmit}>
             {create.isPending ? "创建中…" : "创建"}
           </Button>
         </DialogFooter>
