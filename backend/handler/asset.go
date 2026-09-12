@@ -84,15 +84,19 @@ func (h *AssetHandler) Create(c *gin.Context) {
 
 	if req.PriceSource == "yahoo" || req.PriceSource == "computed_gold_cny" {
 		// 回填是 best-effort 后台任务，用 WithoutCancel 脱离请求生命周期。
+		// ctx 必须在请求 goroutine 内 eager 求值：Gin 会把 *gin.Context 归还 sync.Pool
+		// 并被下个请求复用，若在后台 goroutine 内 lazy 读 c.Request 将构成数据竞争 +
+		// use-after-recycle（Go 内存模型 UB）。闭包只捕获 ctx/symbol/h，不再引用 c。
 		// 裸 goroutine 不经 Gin Recovery 覆盖，provider 走外部 HTTP+JSON 解析，
 		// 一旦 panic 会拖垮整个进程（爆炸半径含博客主站），故自旋 recover 兜底。
+		ctx := context.WithoutCancel(c.Request.Context())
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("asset: backfill panic for %s: %v", symbol, r)
 				}
 			}()
-			h.quotes.BackfillHistory(context.WithoutCancel(c.Request.Context()), symbol, 365)
+			h.quotes.BackfillHistory(ctx, symbol, 365)
 		}()
 	}
 
