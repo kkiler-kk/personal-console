@@ -12,7 +12,7 @@
 
 | 板块 | 定位 | 形态 |
 |---|---|---|
-| 📈 投资 | 美股个股、ETF（如 QQQ）、银行积存金（按克/人民币）的持仓与盈亏跟踪 | 工具 |
+| 📈 投资 | 美股个股、ETF（如 QQQ）、**A 股（沪 .SS / 深 .SZ，2026-09-13 增补）**、银行积存金（按克/人民币）的持仓与盈亏跟踪；持仓行显示 **PE(TTM)**（2026-09-13 增补） | 工具 |
 | 🗣️ 学习 | 英语/西班牙语**学习阶段记录 + 学习时长记录与统计 + 打卡日历**（按类型记时长：背单词/听力/口语等；用户已有其他学习软件，不做生词本/SRS——2026-09-12/13 两次修订） | 轻工具 |
 | 🌱 生活 | 习惯打卡热力图、随手记、照片墙 | 工具 + 内容 |
 | ✍️ 博客 | 现有文章/分类/标签/归档/评论系统，保留并重做样式 | 内容 |
@@ -153,7 +153,7 @@ CREATE TABLE habit_logs (
 
 ### 4.1 数据源与降级链
 
-1. **首选 Yahoo Finance 行情**（无需 API key，v8 chart 接口）：个股、ETF、`GC=F`（COMEX 黄金期货 USD/oz；原计划的现货 `XAUUSD=X` 已被 Yahoo 下线，2026-09-12 实测 404）、`CNY=X`（美元兑人民币）。
+1. **首选 Yahoo Finance 行情**（无需 API key，v8 chart 接口）：个股、ETF、A 股（`600519.SS`/`000001.SZ`）、`GC=F`（COMEX 黄金期货 USD/oz；原计划的现货 `XAUUSD=X` 已被 Yahoo 下线，2026-09-12 实测 404）、`CNY=X`（美元兑人民币）。
 2. **降级 Stooq 免费 CSV**（`https://stooq.com/q/l/`）：Yahoo 限流或结构变化时兜底。
 3. **最终降级**：返回 `assets.current_price`（最近一次成功值）+ `price_updated_at`，前端灰显"更新于 X 分钟前"。页面永不因行情失败而白屏。
 
@@ -169,6 +169,13 @@ CREATE TABLE habit_logs (
 - 建为一个 `price_source=computed_gold_cny` 的特殊资产（symbol 固定 `GOLD_CNY_G`）。
 - 参考价 = `GC=F ÷ 31.1035（克/盎司）× CNY=X`（GC=F 为 COMEX 黄金期货，与现货存在小幅基差，叠加银行点差后仍属"参考价"定位；2026-09-12 修订：原 XAUUSD=X 已被 Yahoo 下线）。
 - 与银行报价存在每克数元以内的点差，属预期；页面标注"参考价"。用户也可将该资产改为 `manual` 手动输价。
+
+### 4.4 基本面（PE，2026-09-13 增补）
+
+- **PE(TTM)** 来自 Yahoo v7 quote 接口（需 crumb：cookie → `GET /v1/test/getcrumb` → 带 crumb 调 v7；crumb 内存缓存，401 时重取一次）。批量 symbols 一次调用。
+- Redis 缓存 `fund:<symbol>` 1 小时（PE 无需分钟级新鲜度）。
+- **只降级不报错**：manual 资产与 GOLD_CNY_G 不请求（恒 null）；接口失败/字段缺失（多数 ETF 有 PE、期货无）→ null + log；持仓行 `pe_ttm` 字段 null 时前端显示 "—"。
+- `/api/positions` 的行结构**新增** `pe_ttm`（可 null）——遵守 schema 只增不改。
 
 ## 5. API 设计
 
@@ -229,7 +236,7 @@ frontend/src/
 │   └── charts/                   基于 Recharts 的封装（收益曲线、体重曲线、热力图）
 ├── pages/
 │   ├── Dashboard.tsx             /            4 统计卡 + 收益曲线 + 今日学习打卡入口 + 习惯热力缩略
-│   ├── invest/                   /invest      持仓表·流水·录入对话框·收益曲线·占比饼图
+│   ├── invest/                   /invest      持仓表(含 PE(TTM) 列)·流水·录入对话框(美股/ETF/A股/积存金/手动)·收益曲线·占比条
 │   ├── learn/                    /learn       语言阶段卡(可编辑)·一键打卡·打卡日历·连续天数
 │   ├── （fitness 已取消，导航与路由移除）
 │   ├── life/                     /life        习惯热力图·随手记·照片墙（复用 gallery API）
