@@ -74,6 +74,16 @@ func TestOversell(t *testing.T) {
 	}
 }
 
+func TestUnknownSide(t *testing.T) {
+	_, err := ComputePosition([]Trade{{Side: "hold", Quantity: 1, Price: 100, Fee: 0}}, nil)
+	if err == nil {
+		t.Fatal("want error for unknown side")
+	}
+	if errors.Is(err, ErrOversell) {
+		t.Fatal("unknown side must not be ErrOversell")
+	}
+}
+
 func TestEmptyTrades(t *testing.T) {
 	pos, err := ComputePosition(nil, p(100))
 	if err != nil || pos.Quantity != 0 || pos.RealizedPnl != 0 {
