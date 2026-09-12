@@ -68,7 +68,7 @@ CREATE TABLE assets (
   symbol      VARCHAR(32) UNIQUE NOT NULL,   -- AAPL / QQQ / GOLD_CNY_G
   name        VARCHAR(100) NOT NULL,         -- 显示名，如"苹果""纳指ETF""银行积存金"
   type        VARCHAR(16) NOT NULL,          -- stock / etf / metal / other（预留 crypto）
-  price_source VARCHAR(16) NOT NULL,         -- yahoo / computed_gold_cny / manual
+  price_source VARCHAR(32) NOT NULL,         -- yahoo / computed_gold_cny / manual（勘误：原 16 装不下 computed_gold_cny）
   currency    VARCHAR(8) NOT NULL DEFAULT 'USD', -- USD / CNY
   current_price DECIMAL(18,4),               -- 最近一次成功获取的价格
   price_updated_at DATETIME,
