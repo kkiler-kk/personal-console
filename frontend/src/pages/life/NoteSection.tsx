@@ -32,8 +32,9 @@ export function NoteSection() {
   const create = useMutation({
     mutationFn: () => {
       const body = content.trim()
-      // title = 内容首行截 30 字符（不足全取；首行天然无换行）
-      const title = body.split(/\r?\n/)[0].slice(0, 30)
+      // title = 内容首行截 30 字符（不足全取；首行天然无换行）；Array.from 按码点切割：
+      // .slice 按 UTF-16 code unit 会把 emoji 代理对劈出孤立代理（JSON→Go 持久化为 U+FFFD 不可自愈）
+      const title = Array.from(body.split(/\r?\n/)[0].trim()).slice(0, 30).join("")
       return api.createPost({ title, content: body, category_id: notesCat?.id, status: "published" })
     },
     onSuccess: () => {
