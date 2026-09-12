@@ -166,7 +166,10 @@ if checked, total, err := h.habit.TodayCounts(c.Request.Context()); err != nil {
 5. **登录回跳保留 search+hash**：Login.tsx `from.pathname` → `from.pathname + from.search + from.hash`
 6. **后端 ValueCurve carry-in**：invest.go PositionsHistory 的 closes 查询窗口前多取最近一行每 symbol（`OR (symbol, date) IN (SELECT symbol, MAX(date) FROM price_history WHERE date < ? GROUP BY symbol)` 或两次查询合并——实现者选简洁方案），窗口首日不再回退 CurrentPrice 造成的偏平
 7. **quote.Service 单实例**：main.go 构造一次传入 router.Setup（签名加参 `qs *quote.Service`），消除双实例双连接池
-8. **smoke.mjs**：资产创建挪进 try（清理 guaranteed）；删交易补 ok() 检查 WARN
+8. **smoke.mjs**：资产创建挪进 try（清理 guaranteed）；删交易补 ok() 检查 WARN；STEP8 加 `pe_ttm` 键存在性形状断言一行
+9. **学习模块批次（阶段 3 终审移交）**：minutes 上限（后端 binding `lte=14400` + 前端 SessionDialog canSubmit 同上限）；date 禁未来（前端 input `max={today}` + 后端 CreateSession 拒绝 date>今天 400）；StudyCalendar 增「已打卡」档（minutes=0 但有记录 → 可辨样式 + 图例项）；LearnPage profilesQ 补一行 isError 提示；SessionDialog 两个 Select 的 Label 补 htmlFor/id；CLAUDE.md learn handler 摘要补 "profiles list/upsert"
+10. **投资模块批次（阶段 2.5 终审移交）**：fetchPEs 加有界 ctx 预算（12-15s，防挂死代理下 positions 延迟无上界）；fc 排空注释措辞修正
+11. **可选（时间富余才做，报告注明）**：crumb compare-and-invalidate；v7 error 字段解析；learn.go IFNULL(updated_at,CURRENT_TIMESTAMP) 时区收敛；smoke 删交易/清理失败 WARN 补 ok() 检查
 - [ ] **验证**：backend build/vet/test 全绿；frontend tsc×2/build 零错误；起 8090+3001 手动 curl 抽查错误态（停后端→前端查询 isError→ErrorState 渲染路径由 build+tsc 保证，浏览器级验证留冒烟）；ValueCurve carry-in 用 curl 对照（造窗口前 close 数据验证首日 value 用 carry-in 价）
 - [ ] **Commit** `fix: site-wide polish — error states, a11y, curve carry-in, single quote service`
 
