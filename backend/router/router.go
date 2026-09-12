@@ -38,8 +38,11 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 	trh := handler.NewTradeHandler(db, rdb)
 	ih := handler.NewInvestHandler(db, qs)
 
-	// dashboard 复用 InvestHandler 的实时持仓计算，须在 ih 之后构造
-	dh := handler.NewDashboardHandler(db, rdb, ih)
+	// learn: profiles/sessions/stats/calendar（Task 3.3）
+	lh := handler.NewLearnHandler(db, rdb)
+
+	// dashboard 复用 InvestHandler 持仓计算与 LearnHandler 统计，须在 ih/lh 之后构造
+	dh := handler.NewDashboardHandler(db, rdb, ih, lh)
 
 	// serve uploaded files
 	r.Static("/uploads", "./uploads")
@@ -115,6 +118,14 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 		protected.GET("/positions/history", ih.PositionsHistory)
 		protected.GET("/quotes", ih.Quotes)
 		protected.GET("/price-history", ih.PriceHistory)
+
+		// learn: profiles / sessions / stats / calendar
+		protected.GET("/learn/profiles", lh.Profiles)
+		protected.PUT("/learn/profiles/:lang", lh.UpdateProfile)
+		protected.POST("/learn/sessions", lh.CreateSession)
+		protected.DELETE("/learn/sessions/:id", lh.DeleteSession)
+		protected.GET("/learn/stats", lh.Stats)
+		protected.GET("/learn/calendar", lh.Calendar)
 	}
 
 	return r

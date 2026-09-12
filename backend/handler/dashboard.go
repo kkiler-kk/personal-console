@@ -20,10 +20,11 @@ type DashboardHandler struct {
 	redis     *redis.Client
 	uploadDir string
 	invest    *InvestHandler
+	learn     *LearnHandler
 }
 
-func NewDashboardHandler(db *sqlx.DB, rdb *redis.Client, invest *InvestHandler) *DashboardHandler {
-	return &DashboardHandler{db: db, redis: rdb, uploadDir: "./uploads", invest: invest}
+func NewDashboardHandler(db *sqlx.DB, rdb *redis.Client, invest *InvestHandler, learn *LearnHandler) *DashboardHandler {
+	return &DashboardHandler{db: db, redis: rdb, uploadDir: "./uploads", invest: invest, learn: learn}
 }
 
 type dashboardSummary struct {
@@ -38,6 +39,7 @@ type dashboardSummary struct {
 	WorkoutsThisWeek   int      `json:"workouts_this_week"`
 	HabitsCheckedToday int      `json:"habits_checked_today"`
 	HabitsTotal        int      `json:"habits_total"`
+	StudyMinutesToday  int      `json:"study_minutes_today"`
 }
 
 func (h *DashboardHandler) Summary(c *gin.Context) {
@@ -79,6 +81,22 @@ func (h *DashboardHandler) Summary(c *gin.Context) {
 		s.PortfolioValue = &v
 		s.PortfolioPnl = &pnl
 		s.PortfolioPnlPct = &pct
+	}
+	// learn: streak / review_due / 今日学习分钟数（Task 3.3）。
+	// StatsData 失败仅 log，三字段保持零值，不影响其他字段。
+	if st, err := h.learn.StatsData(c.Request.Context()); err != nil {
+		log.Printf("dashboard: learn stats unavailable: %v", err)
+	} else {
+		due := 0
+		if !st.Today.En {
+			due++
+		}
+		if !st.Today.Es {
+			due++
+		}
+		s.ReviewDue = due
+		s.LearnStreak = st.Streak
+		s.StudyMinutesToday = st.Today.Minutes
 	}
 
 	resp, _ := json.Marshal(s)
