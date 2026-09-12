@@ -21,10 +21,11 @@ type DashboardHandler struct {
 	uploadDir string
 	invest    *InvestHandler
 	learn     *LearnHandler
+	habit     *HabitHandler
 }
 
-func NewDashboardHandler(db *sqlx.DB, rdb *redis.Client, invest *InvestHandler, learn *LearnHandler) *DashboardHandler {
-	return &DashboardHandler{db: db, redis: rdb, uploadDir: "./uploads", invest: invest, learn: learn}
+func NewDashboardHandler(db *sqlx.DB, rdb *redis.Client, invest *InvestHandler, learn *LearnHandler, habit *HabitHandler) *DashboardHandler {
+	return &DashboardHandler{db: db, redis: rdb, uploadDir: "./uploads", invest: invest, learn: learn, habit: habit}
 }
 
 type dashboardSummary struct {
@@ -97,6 +98,14 @@ func (h *DashboardHandler) Summary(c *gin.Context) {
 		s.ReviewDue = due
 		s.LearnStreak = st.Streak
 		s.StudyMinutesToday = st.Today.Minutes
+	}
+	// habit: 今日打卡数 / 未归档习惯总数（Task 4.2）。
+	// TodayCounts 失败仅 log，两字段保持零值，不影响其他字段。
+	if checked, total, err := h.habit.TodayCounts(c.Request.Context()); err != nil {
+		log.Printf("dashboard: habit counts unavailable: %v", err)
+	} else {
+		s.HabitsCheckedToday = checked
+		s.HabitsTotal = total
 	}
 
 	resp, _ := json.Marshal(s)

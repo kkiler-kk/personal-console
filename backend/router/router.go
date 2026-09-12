@@ -41,8 +41,12 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 	// learn: profiles/sessions/stats/calendar（Task 3.3）
 	lh := handler.NewLearnHandler(db, rdb)
 
-	// dashboard 复用 InvestHandler 持仓计算与 LearnHandler 统计，须在 ih/lh 之后构造
-	dh := handler.NewDashboardHandler(db, rdb, ih, lh)
+	// habit: CRUD/打卡/热力图（Task 4.2）
+	hh := handler.NewHabitHandler(db, rdb)
+
+	// dashboard 复用 InvestHandler 持仓计算、LearnHandler 统计与 HabitHandler 今日计数，
+	// 须在 ih/lh/hh 之后构造
+	dh := handler.NewDashboardHandler(db, rdb, ih, lh, hh)
 
 	// serve uploaded files
 	r.Static("/uploads", "./uploads")
@@ -126,6 +130,16 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 		protected.DELETE("/learn/sessions/:id", lh.DeleteSession)
 		protected.GET("/learn/stats", lh.Stats)
 		protected.GET("/learn/calendar", lh.Calendar)
+
+		// habits: CRUD / 打卡 / 热力图（Task 4.2）
+		// 注：GET 树内 /habits/heatmap 为纯静态、与 :id 不同方法树，gin v1.10 实测无冲突
+		protected.GET("/habits", hh.List)
+		protected.POST("/habits", hh.Create)
+		protected.GET("/habits/heatmap", hh.Heatmap)
+		protected.PUT("/habits/:id", hh.Update)
+		protected.DELETE("/habits/:id", hh.Delete)
+		protected.POST("/habits/:id/check", hh.Check)
+		protected.DELETE("/habits/:id/check", hh.Uncheck)
 	}
 
 	return r
