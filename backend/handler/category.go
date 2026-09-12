@@ -87,16 +87,28 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 	}
 
 	var req struct {
-		Name    string `json:"name"`
-		Slug    string `json:"slug"`
-		Section string `json:"section"`
+		Name    string  `json:"name"`
+		Slug    string  `json:"slug"`
+		Section *string `json:"section"`
 	}
 	if err = c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	_, err = h.db.Exec("UPDATE categories SET name = ?, slug = ?, section = ? WHERE id = ?", req.Name, req.Slug, validSection(req.Section), id)
+	// merge semantics: section omitted → preserve current value;
+	// section present → normalize against whitelist
+	section := ""
+	if req.Section != nil {
+		section = validSection(*req.Section)
+	} else {
+		if err = h.db.Get(&section, "SELECT section FROM categories WHERE id = ?", id); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
+			return
+		}
+	}
+
+	_, err = h.db.Exec("UPDATE categories SET name = ?, slug = ?, section = ? WHERE id = ?", req.Name, req.Slug, section, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
