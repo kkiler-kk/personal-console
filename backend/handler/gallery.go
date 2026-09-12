@@ -66,11 +66,17 @@ func (h *GalleryHandler) List(c *gin.Context) {
 
 func (h *GalleryHandler) Delete(c *gin.Context) {
 	filename := c.Param("filename")
-	// sanitize: only allow files in uploads dir
-	cleanName := filepath.Base(filename)
-	path := filepath.Join(h.uploadDir, cleanName)
 
-	if !strings.HasPrefix(path, h.uploadDir) {
+	// sanitize: only plain file names inside the uploads dir are allowed.
+	// note: filepath.Join cleans its result ("./uploads" + name -> "uploads/name"),
+	// so the prefix check has to compare against the cleaned base dir plus a
+	// separator — comparing against h.uploadDir ("./uploads") never matches.
+	baseDir := filepath.Clean(h.uploadDir)
+	path := filepath.Join(baseDir, filepath.Base(filename))
+
+	if filename == "" || filename == "." || filename == ".." ||
+		strings.ContainsAny(filename, `/\`) ||
+		!strings.HasPrefix(path, baseDir+string(filepath.Separator)) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid filename"})
 		return
 	}
