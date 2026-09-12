@@ -7,11 +7,11 @@
 | 板块     | 定位                                     | 进度                                   |
 | -------- | ---------------------------------------- | -------------------------------------- |
 | 📈 投资 | 美股/A 股个股、ETF、银行积存金的持仓与盈亏跟踪 | 已上线（阶段 2）                       |
-| 🗣️ 学习 | 英语/西班牙语学习阶段记录 + 每日打卡（简化版，不做生词本/SRS） | 阶段 3 上线        |
-| 🌱 生活 | 习惯打卡热力图、随手记、照片墙            | 照片墙已上线（阶段 1），完整版见阶段 5 |
+| 🗣️ 学习 | 英语/西班牙语学习阶段记录 + 每日打卡（简化版，不做生词本/SRS） | 已上线（阶段 3）                       |
+| 🌱 生活 | 习惯打卡热力图、随手记、照片墙            | 照片墙已上线（阶段 1），完整版见阶段 4 |
 | ✍️ 博客 | 文章/分类/标签/归档/评论系统              | 已完成（阶段 1）                       |
 
-分期进度：阶段 0（仓库初始化 + 隐私清理）、阶段 1（控制台壳 + 博客/图库/评论/登录功能等价迁移）、阶段 2（投资模块）已完成；健身板块已取消（2026-09-12 用户决定，健身内容可作为博客分类存在）；阶段 3-5 详见 `docs/superpowers/specs/2026-09-12-personal-site-redesign-design.md`。
+分期进度：阶段 0（仓库初始化 + 隐私清理）、阶段 1（控制台壳 + 博客/图库/评论/登录功能等价迁移）、阶段 2（投资模块）、阶段 3（学习模块）已完成；健身板块已取消（2026-09-12 用户决定，健身内容可作为博客分类存在）；阶段 4（生活模块 + 全站收尾）待做，详见 `docs/superpowers/specs/2026-09-12-personal-site-redesign-design.md`。
 
 ## 技术栈
 
@@ -58,7 +58,8 @@ blogs/
 │   │   ├── gallery.go          # 照片墙（读取 uploads 目录）
 │   │   ├── asset.go            # 资产 CRUD + 手动改价
 │   │   ├── trade.go            # 交易流水 CRUD（超卖校验）
-│   │   └── invest.go           # 持仓/行情/价格历史/收益曲线
+│   │   ├── invest.go           # 持仓/行情/价格历史/收益曲线
+│   │   └── learn.go            # 语言档案 + 学习记录 + 统计 + 打卡日历
 │   ├── middleware/
 │   │   └── auth.go             # JWT 认证中间件
 │   ├── model/
@@ -66,6 +67,7 @@ blogs/
 │   ├── pkg/
 │   │   ├── jwt.go              # JWT 工具
 │   │   ├── portfolio/          # 持仓盈亏 + 价值曲线纯函数（含单测）
+│   │   ├── learn/              # 学习连续天数（streak）纯函数（含单测）
 │   │   └── quote/              # 行情子系统：Yahoo→Stooq→兜底三级降级（含单测）
 │   ├── service/
 │   │   └── snapshot.go         # 每日价格快照 cron + 启动补跑（一年回填在建资产时异步触发）
@@ -79,7 +81,7 @@ blogs/
     ├── components.json         # shadcn/ui 配置
     ├── index.html
     ├── scripts/
-    │   └── smoke.mjs           # Playwright 冒烟测试
+    │   └── smoke.mjs           # Playwright 冒烟测试（九步链路）
     └── src/
         ├── main.tsx            # 入口
         ├── App.tsx             # 路由
@@ -100,6 +102,7 @@ blogs/
             ├── Dashboard.tsx   # 首页仪表盘（统计卡 + 收益曲线）
             ├── Login.tsx       # 登录
             ├── invest/         # 投资页（持仓/交易/曲线/资产对话框）
+            ├── learn/          # 学习页（阶段档案/记录学习/统计图表/打卡日历）
             ├── blog/           # 文章列表/详情/归档/分类/标签
             ├── admin/          # 文章管理/分类管理/编辑器
             └── life/           # 生活页（照片墙）
@@ -158,7 +161,7 @@ npm run dev
 
 ### 4. 冒烟测试（可选）
 
-全栈跑起来后执行：`SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs`，八步链路（含评论发→删、投资链路：建资产→录交易→持仓校验→清理）全过输出 `STEP8 INVEST PASS` + `SMOKE PASS ✅`。
+全栈跑起来后执行：`SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs`，九步链路（含评论发→删、投资链路：建资产→录交易→持仓校验→清理、学习链路：记录时长→统计校验→/learn 页面→清理）全过输出 `STEP8 INVEST PASS` + `STEP9 LEARN PASS` + `SMOKE PASS ✅`。
 
 ## API 文档
 
@@ -194,7 +197,7 @@ npm run dev
 | POST   | /api/upload                | 上传图片           |
 | GET    | /api/gallery               | 照片墙列表         |
 | DELETE | /api/gallery/:filename     | 删除照片           |
-| GET    | /api/dashboard/summary     | 控制台统计摘要     |
+| GET    | /api/dashboard/summary     | 控制台统计摘要（含 learn_streak/review_due/study_minutes_today 学习字段） |
 
 ### 投资接口（需认证 Bearer Token）
 
@@ -212,6 +215,17 @@ npm run dev
 | GET    | /api/quotes?symbols=A,B           | 批量行情（Yahoo→Stooq→本地兜底三级降级）   |
 | GET    | /api/price-history?symbol=&days=  | 单资产收盘价历史（days 默认 90，上限 365） |
 | GET    | /api/positions/history?days=      | 组合价值曲线（市值/成本/盈亏，CNY 计价）   |
+
+### 学习接口（需认证 Bearer Token）
+
+| 方法   | 路径                          | 说明                                             |
+| ------ | ----------------------------- | ------------------------------------------------ |
+| GET    | /api/learn/profiles           | 语言阶段档案（仅返回已有行，缺失语言前端渲染空卡） |
+| PUT    | /api/learn/profiles/:lang     | 更新阶段/目标/备注（upsert；lang 仅 en/es）        |
+| POST   | /api/learn/sessions           | 记录一次学习（lang/activity/minutes/date?/note?）  |
+| DELETE | /api/learn/sessions/:id       | 删除一条学习记录（不存在返回 404）                 |
+| GET    | /api/learn/stats              | 统计（streak/今日/本周/累计/分语言/近 28 天逐日）   |
+| GET    | /api/learn/calendar?year=     | 年度打卡日历（仅返回有记录的日期；year 默认当年）   |
 
 ### 请求示例
 
@@ -354,13 +368,36 @@ close  DECIMAL(18,4) NOT NULL
 UNIQUE KEY uk_symbol_date (symbol, date)
 ```
 
+### language_profiles / study_sessions 表（学习模块，阶段 3）
+```sql
+-- language_profiles：语言阶段档案（lang 唯一，可空列查询侧 IFNULL 兜底）
+id         BIGINT PK AUTO_INCREMENT
+lang       VARCHAR(8) UNIQUE NOT NULL   -- en / es
+level      VARCHAR(50) NOT NULL DEFAULT ''   -- 自评阶段，如「中级 B1」
+goal       TEXT (可空)                  -- 学习目标
+note       TEXT (可空)                  -- 备注（在用什么软件学）
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
+-- study_sessions：学习记录（一天可多条；打卡=当日存在记录的派生概念，不落表）
+id           BIGINT PK AUTO_INCREMENT
+lang         VARCHAR(8) NOT NULL        -- en / es
+activity     VARCHAR(20) NOT NULL DEFAULT 'other'  -- vocab/listening/speaking/reading/grammar/other
+minutes      INT NOT NULL DEFAULT 0     -- 学习分钟数（0=纯打卡）
+session_date DATE NOT NULL              -- 学习日期（「今天」一律 Go 本地日期传参，不用 CURDATE()）
+note         VARCHAR(200) (可空)
+created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+KEY idx_session_date (session_date)
+KEY idx_lang_date (lang, session_date)
+```
+
 ## 功能特性
 
-- **控制台 Dashboard**：统计卡（投资组合/学习/习惯/文章/评论/照片）+ 近 30 天收益曲线
+- **控制台 Dashboard**：统计卡（投资组合/今日学习分钟数/习惯/文章/评论/照片）+ 近 30 天收益曲线
 - **投资组合**：资产/交易流水/加权平均成本持仓盈亏（CNY 汇总，美元资产按实时汇率折算）；银行积存金按 `GC=F ÷ 31.1035 × USDCNY` 换算克价
 - **行情三级降级**：Yahoo → Stooq → 本地兜底价（标记 stale），页面永不因行情失败而不可用；Redis 缓存 60 秒
 - **PE(TTM) 与 A 股**：持仓含 PE(TTM)（Yahoo 基本面，1h 缓存，失败恒 null 不阻塞）；支持 A 股（.SS/.SZ 后缀，CNY 计价）
 - **每日快照**：robfig/cron 每日 06:00（北京时间）快照自动跟踪资产（Yahoo/积存金）价格，启动时补跑漏掉的快照；创建自动跟踪资产时异步回填一年历史；收益曲线由快照收盘价 + 交易流水推导
+- **学习模块**：英语/西班牙语阶段档案（自评阶段/目标/备注，随时编辑）；按活动类型（背单词/听力/口语/阅读/语法/其他）记录学习时长；统计五件套（连续天数 streak/今日/本周/累计/分语言）+ 近 28 天柱状图 + 年度打卡日历；快速打卡（0 分钟记录标记「今天学过」）
 - **文章管理**：Markdown 编辑器（图片上传 + 预览），草稿/发布状态
 - **分类系统**：文章可按分类浏览，分类带 `section` 字段归属五大板块
 - **标签系统**：文章可打多个标签，支持按标签筛选
@@ -371,7 +408,7 @@ UNIQUE KEY uk_symbol_date (symbol, date)
 - **Redis 缓存**：文章列表、分类、标签数据缓存 5-30 分钟
 - **JWT 认证**：登录签发 Token，有效期 72 小时（注册已下线，单用户）
 - **深浅色主题**：仪表盘风 UI，支持明暗切换；移动端底部 Tab 导航
-- **冒烟测试**：Playwright 脚本八步链路：登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路（建资产/录交易/持仓校验/清理）
+- **冒烟测试**：Playwright 脚本九步链路：登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路（建资产/录交易/持仓校验/清理）→ 学习链路（记录时长/统计校验/页面断言/清理）
 
 ## 环境变量配置
 

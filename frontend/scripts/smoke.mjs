@@ -1,4 +1,4 @@
-// 阶段冒烟测试：真实浏览器跑通「未登录跳转 → 登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路」八步链路。
+// 阶段冒烟测试：真实浏览器跑通「未登录跳转 → 登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路 → 学习链路」九步链路。
 // 用法：SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs
 // 可选：BASE_URL 覆盖前端地址（默认 http://localhost:3000）
 import { chromium } from "playwright"
@@ -100,6 +100,31 @@ try {
   if (!del.ok()) console.error(`WARN: cleanup asset ${assetId} failed: ${del.status()}`)
 }
 console.log("STEP8 INVEST PASS")
+
+// 9. 学习链路：记录学习时长 → 统计校验 → /learn 页面断言 → 清理（复用第 8 步 auth 登录态）
+const now = new Date()
+// today 用本地日期构造，与后端 Go 本地日期同口径（toISOString 为 UTC，晚间与本地可能差一天）
+const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+const sess = await page.request.post(BASE + "/api/learn/sessions", {
+  headers: auth,
+  data: { lang: "en", activity: "vocab", minutes: 25, date: today },
+})
+if (!(sess.status() === 201 || sess.ok())) throw new Error("create learn session failed: " + sess.status())
+const { id: sessionId } = await sess.json()
+try {
+  const st = await (await page.request.get(BASE + "/api/learn/stats", { headers: auth })).json()
+  // 断言用 >=：当天若已有用户真实学习记录，minutes/streak 只会更大，不误判
+  if (!st.today.en || st.today.minutes < 25 || st.streak < 1) {
+    throw new Error("learn stats mismatch: " + JSON.stringify(st))
+  }
+  await page.goto(BASE + "/learn", { waitUntil: "networkidle" })
+  await page.waitForSelector("text=英语", { timeout: 10_000 })
+} finally {
+  // 清理只删冒烟自建的 session id，不动用户真实学习记录
+  const del = await page.request.delete(BASE + `/api/learn/sessions/${sessionId}`, { headers: auth })
+  if (!del.ok()) console.error(`WARN: cleanup learn session ${sessionId} failed: ${del.status()}`)
+}
+console.log("STEP9 LEARN PASS")
 
 if (errors.length) throw new Error("页面 JS 错误:\n" + errors.join("\n"))
 console.log("SMOKE PASS ✅")
