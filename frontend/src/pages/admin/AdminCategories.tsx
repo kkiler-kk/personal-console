@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 const SECTIONS: { value: Section; label: string }[] = [
   { value: "blog", label: "博客" }, { value: "invest", label: "投资" },
@@ -69,7 +70,21 @@ export default function AdminCategories() {
                     <SelectContent>{SECTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </TableCell>
-                <TableCell><button className="text-sm text-destructive hover:underline" onClick={() => del.mutate(c.id)}>删除</button></TableCell>
+                <TableCell>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild><button className="text-sm text-destructive hover:underline">删除</button></AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>删除分类「{c.name}」？</AlertDialogTitle>
+                        <AlertDialogDescription>该分类下文章将变为无分类</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>取消</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => del.mutate(c.id)}>删除</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

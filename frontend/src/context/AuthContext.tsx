@@ -16,8 +16,14 @@ export const useAuth = () => useContext(Ctx)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"))
   const [user, setUser] = useState<AuthUser | null>(() => {
-    const raw = localStorage.getItem("user")
-    return raw ? (JSON.parse(raw) as AuthUser) : null
+    try {
+      const raw = localStorage.getItem("user")
+      return raw ? (JSON.parse(raw) as AuthUser) : null
+    } catch {
+      // 损坏的 JSON：清理并视为未登录，避免初始化 throw 导致全站白屏
+      localStorage.removeItem("user")
+      return null
+    }
   })
 
   // 启动时用 profile 校验 token 有效性；失败则清理

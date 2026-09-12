@@ -1,4 +1,4 @@
-// 阶段冒烟测试：真实浏览器跑通「未登录跳转 → 登录 → Dashboard → 博客 → 管理后台 → 生活页」六步链路。
+// 阶段冒烟测试：真实浏览器跑通「未登录跳转 → 登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删」七步链路。
 // 用法：SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs
 // 可选：BASE_URL 覆盖前端地址（默认 http://localhost:3000）
 import { chromium } from "playwright"
@@ -34,9 +34,36 @@ await page.waitForSelector("h1", { timeout: 10_000 })
 await page.goto(BASE + "/admin/posts", { waitUntil: "networkidle" })
 await page.waitForSelector("text=文章管理", { timeout: 10_000 })
 
-// 6. 生活页可达
+// 6. 生活页可达（用 h1 精确断言，避免命中侧边栏导航）
 await page.goto(BASE + "/life", { waitUntil: "networkidle" })
-await page.waitForSelector("text=生活", { timeout: 10_000 })
+await page.waitForSelector('h1:has-text("生活")', { timeout: 10_000 })
+
+// 7. 评论发→删链路（若无已发布文章则跳过，不算失败）
+await page.goto(BASE + "/blog", { waitUntil: "networkidle" })
+// 文章卡片标题链接（PostCard: <a class="text-lg font-semibold ...">），避免命中侧边栏/归档按钮
+const firstPostLink = page.locator('a.text-lg.font-semibold[href^="/blog/"]').first()
+if (await firstPostLink.count() === 0) {
+  console.log("STEP7 SKIPPED: no posts")
+} else {
+  await firstPostLink.click()
+  await page.waitForSelector('h2:has-text("评论")', { timeout: 10_000 })
+  const CONTENT = `smoke-comment-${Date.now()}`
+  await page.fill('input[placeholder="昵称"]', "Smoke")
+  await page.fill('input[placeholder^="邮箱"]', "smoke-test@example.com")
+  await page.fill('textarea[placeholder="说点什么…"]', CONTENT)
+  await page.locator('button:has-text("评论"):not(:has-text("发送中"))').first().click()
+  const commentText = page.locator(`p:text-is("${CONTENT}")`).first()
+  await commentText.waitFor({ timeout: 10_000 })
+  // can_delete 依赖查询时的 email（localStorage.comment_email 提交成功后才写入），
+  // 与真实用户二次访问一致：reload 后删除按钮才出现
+  await page.waitForFunction(() => localStorage.getItem("comment_email") === "smoke-test@example.com", { timeout: 10_000 })
+  await page.reload({ waitUntil: "networkidle" })
+  await page.locator(`p:text-is("${CONTENT}")`).first().waitFor({ timeout: 10_000 })
+  // 删除该评论（评论条目内含「删除」按钮）
+  const item = page.locator("div.py-3", { hasText: CONTENT }).first()
+  await item.locator('button:has-text("删除")').click()
+  await page.waitForSelector(`p:text-is("${CONTENT}")`, { state: "detached", timeout: 10_000 })
+}
 
 if (errors.length) throw new Error("页面 JS 错误:\n" + errors.join("\n"))
 console.log("SMOKE PASS ✅")

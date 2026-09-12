@@ -30,8 +30,8 @@ A personal blog system with a React frontend and Go backend. Uses MySQL for pers
 
 Entry point: `cmd/main.go` → loads config, init DB + Redis, auto-migrates tables, starts router.
 
-- `config/` — Config loading (`.env` via godotenv), MySQL (`sqlx`), Redis connections
-- `handler/` — HTTP handlers: `user.go` (register/login/profile), `post.go` (CRUD + archive), `category.go` (CRUD)
+- `config/` — Config loading (environment variables; `backend/.env` is NOT auto-loaded — export vars or rely on defaults), MySQL (`sqlx`), Redis connections
+- `handler/` — HTTP handlers: `user.go` (login/profile; register retired), `post.go` (CRUD + archive), `category.go` (CRUD)
 - `middleware/auth.go` — JWT auth middleware
 - `model/model.go` — Data models (User, Post, Category, Tag, PostTag)
 - `pkg/jwt.go` — JWT token generation/validation utilities
@@ -62,13 +62,13 @@ Tables: `users`, `categories`, `posts`, `tags`, `post_tags` (many-to-many). Post
 
 - **sqlx over GORM** — Lightweight, explicit SQL. No GORM magic.
 - **Redis caching** — Post lists, categories, tags cached 5–30 min. Cache invalidated on post/category/tag mutations.
-- **First user is admin** — No role column; the first registered user gets admin privileges implicitly.
+- **First user is admin** — No role column; the first user in the database gets admin privileges implicitly (registration is retired).
 - **Slug-based URLs** — Posts and categories use human-readable slugs, not IDs.
 - **Playwright smoke test** — `frontend/scripts/smoke.mjs` covers login → Dashboard → blog → admin → life pages with a real browser (`SMOKE_USER=<user> SMOKE_PASS=<pass> node frontend/scripts/smoke.mjs`, expects `SMOKE PASS ✅`). Backend fixes are verified by targeted curl/API checks plus a full smoke re-run. No unit test suite yet.
 
 ## Configuration
 
-- Backend reads from `backend/.env` (copy from `.env.example`).
+- Backend config comes from environment variables (`config.go` uses plain `os.Getenv`); `backend/.env` is NOT auto-loaded — export vars before starting, or rely on defaults.
 - Docker Compose uses DaoCloud mirror for images (`docker.m.daocloud.io`).
 - Frontend Vite config in `vite.config.ts` — port 3000 with `/api` and `/uploads` proxy.
 

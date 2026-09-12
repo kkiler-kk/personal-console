@@ -14,6 +14,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
             <CommandItem key={to} onSelect={() => go(to)}><Icon className="size-4" /> {label}</CommandItem>
           ))}
+          <CommandItem onSelect={() => go("/blog/archive")}>博客归档</CommandItem>
           <CommandItem onSelect={() => go("/admin/posts")}>管理后台</CommandItem>
         </CommandGroup>
       </CommandList>

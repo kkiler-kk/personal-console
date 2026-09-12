@@ -149,7 +149,7 @@ npm run dev
 
 ### 4. 冒烟测试（可选）
 
-全栈跑起来后执行：`SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs`，六步链路全过输出 `SMOKE PASS ✅`。
+全栈跑起来后执行：`SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs`，七步链路（含评论发→删）全过输出 `SMOKE PASS ✅`。
 
 ## API 文档
 
@@ -243,7 +243,7 @@ updated_at TIMESTAMP
 id         BIGINT PK AUTO_INCREMENT
 name       VARCHAR(50) NOT NULL
 slug       VARCHAR(50) UNIQUE NOT NULL
-section    VARCHAR(20) DEFAULT 'blog'  -- invest/learn/fitness/life/blog
+section    VARCHAR(20) NOT NULL DEFAULT 'blog'  -- invest/learn/fitness/life/blog
 created_at TIMESTAMP
 ```
 
@@ -302,7 +302,7 @@ created_at TIMESTAMP
 - **分类系统**：文章可按分类浏览，分类带 `section` 字段归属五大板块
 - **标签系统**：文章可打多个标签，支持按标签筛选
 - **时间归档**：按年月分组展示文章归档
-- **评论系统**：嵌套回复 + 点赞，管理端可删除
+- **评论系统**：嵌套回复 + 点赞；评论凭邮箱识别，评论者可删除自己的评论，管理员登录后亦可删除
 - **照片墙**：生活页图库，管理端上传/删除
 - **浏览量统计**：每次访问文章自动增加浏览量
 - **Redis 缓存**：文章列表、分类、标签数据缓存 5-30 分钟
@@ -311,6 +311,8 @@ created_at TIMESTAMP
 - **冒烟测试**：Playwright 脚本覆盖登录 → Dashboard → 博客 → 管理后台 → 生活页链路
 
 ## 环境变量配置
+
+> 注意：当前代码不自动加载 `.env`（`config.go` 纯 `os.Getenv`）。需通过 docker-compose `environment`、启动前 `export` 等方式注入环境变量，或等待阶段 2 恢复 `.env` 加载。
 
 复制 `backend/.env.example` 为 `backend/.env` 后修改：
 

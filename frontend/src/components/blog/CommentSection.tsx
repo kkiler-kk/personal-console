@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
-import { useAuth } from "@/context/AuthContext"
 import type { Comment } from "@/lib/types"
 
 const getEmail = () => localStorage.getItem("comment_email") || ""
@@ -15,7 +14,6 @@ const setEmail = (e: string) => localStorage.setItem("comment_email", e)
 
 function CommentItem({ c, slug, onReply }: { c: Comment; slug: string; onReply: (id: number) => void }) {
   const qc = useQueryClient()
-  const { token } = useAuth()
   const [liked, setLiked] = useState(false)
   const email = getEmail()
 
@@ -24,10 +22,14 @@ function CommentItem({ c, slug, onReply }: { c: Comment; slug: string; onReply: 
     onSuccess: (r) => { setLiked(r.liked); c.like_count = r.like_count; qc.invalidateQueries({ queryKey: ["comments", slug] }) },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "点赞失败"),
   })
+  // 后端 DELETE /api/comments/:id 只支持 email 验证；can_delete=true 已蕴含 email 匹配
   const del = useMutation({
-    mutationFn: () => api.deleteComment(c.id, token ? undefined : email),
+    mutationFn: () => {
+      if (!email) { toast.error("请先在评论框填写邮箱"); return Promise.reject(new Error("missing email")) }
+      return api.deleteComment(c.id, email)
+    },
     onSuccess: () => { toast.success("已删除"); qc.invalidateQueries({ queryKey: ["comments", slug] }) },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "删除失败"),
+    onError: (e: unknown) => { if (e instanceof Error && e.message === "missing email") return; toast.error(e instanceof Error ? e.message : "删除失败") },
   })
 
   return (
