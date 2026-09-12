@@ -19,6 +19,7 @@ export interface DashboardSummary {
   portfolio_value: number | null; portfolio_pnl: number | null; portfolio_pnl_pct: number | null
   review_due: number; learn_streak: number; workouts_this_week: number
   habits_checked_today: number; habits_total: number
+  study_minutes_today: number
 }
 export interface PostListResp { posts: Post[]; total: number; page: number; size: number }
 export interface ArchiveItem { year: number; month: number; count: number }
@@ -48,3 +49,19 @@ export interface PositionsSummary {
 export interface PositionsResp { positions: PositionRow[]; summary: PositionsSummary }
 export interface CurvePoint { date: string; value: number; cost: number; pnl: number }
 export interface PositionsHistoryResp { points: CurvePoint[]; currency: string }
+
+export type Lang = "en" | "es"
+export type ActivityType = "vocab" | "listening" | "speaking" | "reading" | "grammar" | "other"
+export interface LanguageProfile {
+  id: number; lang: Lang; level: string; goal: string; note: string; updated_at: string
+}
+export interface DayMinutes { date: string; minutes: number }
+export interface LearnStats {
+  streak: number
+  today: { minutes: number; en: boolean; es: boolean; by_activity: { activity: ActivityType; minutes: number }[] }
+  week: { minutes: number; days: number }
+  total: { minutes: number; days: number; sessions: number }
+  by_lang: { en: { minutes: number; days: number }; es: { minutes: number; days: number } }
+  recent: DayMinutes[]
+}
+export interface CalendarDay { date: string; minutes: number; langs: Lang[] }

@@ -49,7 +49,10 @@ export default function Dashboard() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <StatCard title="投资组合" value={portfolioValue} sub={portfolioSub} icon={TrendingUp} href="/invest" />
-            <StatCard title="今日学习" value={data.review_due || "—"} sub="阶段 3 上线" icon={Languages} href="/learn" />
+            <StatCard title="今日学习"
+              value={data.study_minutes_today ? `${data.study_minutes_today} 分钟` : "—"}
+              sub={data.learn_streak > 0 ? `连续 ${data.learn_streak} 天` : "今天还没学习"}
+              icon={Languages} href="/learn" />
             <StatCard title="习惯打卡" value={data.habits_total ? `${data.habits_checked_today}/${data.habits_total}` : "—"} sub="阶段 5 上线" icon={Sprout} href="/life" />
           </div>
 

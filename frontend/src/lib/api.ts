@@ -1,4 +1,4 @@
-import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Post, PostListResp, ArchiveItem, Tag, Asset, AssetType, PriceSource, Trade, PositionsResp, PositionsHistoryResp } from "./types"
+import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Post, PostListResp, ArchiveItem, Tag, Asset, AssetType, PriceSource, Trade, PositionsResp, PositionsHistoryResp, ActivityType, CalendarDay, Lang, LanguageProfile, LearnStats } from "./types"
 
 const BASE = "/api"
 
@@ -104,4 +104,13 @@ export const api = {
   getPositions: () => request<PositionsResp>("/positions"),
   getPositionsHistory: (days = 90) => request<PositionsHistoryResp>(`/positions/history${qs({ days })}`),
   getPriceHistory: (symbol: string, days = 90) => request<{ points: { date: string; close: number }[] }>(`/price-history${qs({ symbol, days })}`),
+
+  getLearnProfiles: () => request<{ profiles: LanguageProfile[] }>("/learn/profiles"),
+  updateLearnProfile: (lang: Lang, body: { level: string; goal?: string; note?: string }) =>
+    request<{ message: string }>(`/learn/profiles/${lang}`, { method: "PUT", body: JSON.stringify(body) }),
+  createLearnSession: (body: { lang: Lang; activity: ActivityType; minutes: number; date?: string; note?: string }) =>
+    request<{ id: number }>("/learn/sessions", { method: "POST", body: JSON.stringify(body) }),
+  deleteLearnSession: (id: number) => request<{ message: string }>(`/learn/sessions/${id}`, { method: "DELETE" }),
+  getLearnStats: () => request<LearnStats>("/learn/stats"),
+  getLearnCalendar: (year?: number) => request<{ days: CalendarDay[] }>(`/learn/calendar${qs({ year })}`),
 }

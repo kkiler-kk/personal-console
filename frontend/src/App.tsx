@@ -1,11 +1,12 @@
 import { Routes, Route } from "react-router-dom"
-import { Languages, Compass } from "lucide-react"
+import { Compass } from "lucide-react"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { PagePlaceholder } from "@/components/PagePlaceholder"
 import Login from "@/pages/Login"
 import Dashboard from "@/pages/Dashboard"
 import InvestPage from "@/pages/invest/InvestPage"
+import LearnPage from "@/pages/learn/LearnPage"
 import PostList from "@/pages/blog/PostList"
 import PostDetail from "@/pages/blog/PostDetail"
 import Archive from "@/pages/blog/Archive"
@@ -23,7 +24,7 @@ export default function App() {
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/invest" element={<InvestPage />} />
-        <Route path="/learn" element={<PagePlaceholder title="学习" description="语言学习阶段记录与每日打卡将在阶段 3 上线" icon={Languages} />} />
+        <Route path="/learn" element={<LearnPage />} />
         <Route path="/life" element={<LifePage />} />
         <Route path="/blog" element={<PostList />} />
         <Route path="/blog/archive" element={<Archive />} />
