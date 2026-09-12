@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom"
-import { LayoutDashboard, TrendingUp, Languages, Dumbbell, Sprout, PenLine } from "lucide-react"
+import { LayoutDashboard, TrendingUp, Languages, Sprout, PenLine } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { LucideIcon } from "lucide-react"
 
@@ -7,7 +7,6 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "总览", icon: LayoutDashboard },
   { to: "/invest", label: "投资", icon: TrendingUp },
   { to: "/learn", label: "学习", icon: Languages },
-  { to: "/fitness", label: "健身", icon: Dumbbell },
   { to: "/life", label: "生活", icon: Sprout },
   { to: "/blog", label: "博客", icon: PenLine },
 ]

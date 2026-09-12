@@ -1,4 +1,4 @@
-// 阶段冒烟测试：真实浏览器跑通「未登录跳转 → 登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删」七步链路。
+// 阶段冒烟测试：真实浏览器跑通「未登录跳转 → 登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路」八步链路。
 // 用法：SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs
 // 可选：BASE_URL 覆盖前端地址（默认 http://localhost:3000）
 import { chromium } from "playwright"
@@ -64,6 +64,42 @@ if (await firstPostLink.count() === 0) {
   await item.locator('button:has-text("删除")').click()
   await page.waitForSelector(`p:text-is("${CONTENT}")`, { state: "detached", timeout: 10_000 })
 }
+
+// 8. 投资链路：建资产 → 改价 → 录交易 → 持仓推导校验 → /invest 页面断言 → 清理（token 从登录态 localStorage 取）
+const token = await page.evaluate(() => localStorage.getItem("token"))
+if (!token) throw new Error("STEP8: localStorage 无 token")
+const auth = { Authorization: `Bearer ${token}` }
+const created = await page.request.post(BASE + "/api/assets", {
+  headers: auth,
+  data: { symbol: "SMOKETEST", name: "冒烟测试资产", type: "other", price_source: "manual", currency: "USD" },
+})
+if (!created.ok()) throw new Error("create asset failed: " + created.status())
+const { id: assetId } = await created.json()
+let tradeId = null
+try {
+  const pr = await page.request.put(BASE + `/api/assets/${assetId}/price`, { headers: auth, data: { price: 100 } })
+  if (!pr.ok()) throw new Error("update price failed: " + pr.status())
+  const tr = await page.request.post(BASE + "/api/trades", {
+    headers: auth,
+    data: { asset_id: assetId, side: "buy", quantity: 2, price: 90, fee: 0, traded_at: new Date().toISOString().slice(0, 10) },
+  })
+  if (!tr.ok()) throw new Error("create trade failed: " + tr.status())
+  const trJson = await tr.json() // json() 只能消费一次，先存再用
+  tradeId = trJson.id
+  const pos = await (await page.request.get(BASE + "/api/positions", { headers: auth })).json()
+  const row = pos.positions.find((p) => p.asset.symbol === "SMOKETEST")
+  if (!row || Math.abs(row.quantity - 2) > 1e-9 || Math.abs(row.avg_cost - 90) > 1e-9) {
+    throw new Error("position mismatch: " + JSON.stringify(row))
+  }
+  await page.goto(BASE + "/invest", { waitUntil: "networkidle" })
+  await page.waitForSelector("text=SMOKETEST", { timeout: 10_000 })
+} finally {
+  // 清理：删交易 → 删资产（断言失败也不留测试数据）
+  if (tradeId != null) await page.request.delete(BASE + `/api/trades/${tradeId}`, { headers: auth })
+  const del = await page.request.delete(BASE + `/api/assets/${assetId}`, { headers: auth })
+  if (!del.ok()) console.error(`WARN: cleanup asset ${assetId} failed: ${del.status()}`)
+}
+console.log("STEP8 INVEST PASS")
 
 if (errors.length) throw new Error("页面 JS 错误:\n" + errors.join("\n"))
 console.log("SMOKE PASS ✅")

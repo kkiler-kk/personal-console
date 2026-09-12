@@ -156,7 +156,7 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+          <Button variant="ghost" onClick={() => { setOpen(false); reset() }}>取消</Button>
           <Button disabled={!canSubmit} onClick={() => create.mutate()}>
             {create.isPending ? "创建中…" : "创建"}
           </Button>

@@ -1,5 +1,5 @@
 import { Routes, Route } from "react-router-dom"
-import { Languages, Dumbbell, Compass } from "lucide-react"
+import { Languages, Compass } from "lucide-react"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { PagePlaceholder } from "@/components/PagePlaceholder"
@@ -23,8 +23,7 @@ export default function App() {
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/invest" element={<InvestPage />} />
-        <Route path="/learn" element={<PagePlaceholder title="学习" description="生词本与 SRS 复习将在阶段 3 上线" icon={Languages} />} />
-        <Route path="/fitness" element={<PagePlaceholder title="健身" description="训练日志与身体数据将在阶段 4 上线" icon={Dumbbell} />} />
+        <Route path="/learn" element={<PagePlaceholder title="学习" description="语言学习阶段记录与每日打卡将在阶段 3 上线" icon={Languages} />} />
         <Route path="/life" element={<LifePage />} />
         <Route path="/blog" element={<PostList />} />
         <Route path="/blog/archive" element={<Archive />} />

@@ -6,13 +6,12 @@
 
 | 板块     | 定位                                     | 进度                                   |
 | -------- | ---------------------------------------- | -------------------------------------- |
-| 📈 投资 | 美股个股、ETF、银行积存金的持仓与盈亏跟踪 | 阶段 2 上线                            |
-| 🗣️ 学习 | 英语/西班牙语生词本 + 间隔重复复习（SRS） | 阶段 3 上线                            |
-| 💪 健身 | 训练日志、身体数据曲线、打卡日历          | 阶段 4 上线                            |
+| 📈 投资 | 美股个股、ETF、银行积存金的持仓与盈亏跟踪 | 已上线（阶段 2）                       |
+| 🗣️ 学习 | 英语/西班牙语学习阶段记录 + 每日打卡（简化版，不做生词本/SRS） | 阶段 3 上线        |
 | 🌱 生活 | 习惯打卡热力图、随手记、照片墙            | 照片墙已上线（阶段 1），完整版见阶段 5 |
 | ✍️ 博客 | 文章/分类/标签/归档/评论系统              | 已完成（阶段 1）                       |
 
-分期进度：阶段 0（仓库初始化 + 隐私清理）、阶段 1（控制台壳 + 博客/图库/评论/登录功能等价迁移）已完成；阶段 2-5 详见 `docs/superpowers/specs/2026-09-12-personal-site-redesign-design.md`。
+分期进度：阶段 0（仓库初始化 + 隐私清理）、阶段 1（控制台壳 + 博客/图库/评论/登录功能等价迁移）、阶段 2（投资模块）已完成；健身板块已取消（2026-09-12 用户决定，健身内容可作为博客分类存在）；阶段 3-5 详见 `docs/superpowers/specs/2026-09-12-personal-site-redesign-design.md`。
 
 ## 技术栈
 
@@ -26,6 +25,7 @@
 | 通知     | sonner                   | 全局 toast                 |
 | Markdown | react-markdown           | 博客内容 Markdown 渲染     |
 | 后端     | Go 1.22 + Gin            | RESTful API                |
+| 定时任务 | robfig/cron/v3           | 每日行情快照调度（06:00 北京时间 + 启动补跑） |
 | 数据库   | MySQL 8.0                | 数据持久化                 |
 | ORM      | sqlx                     | 轻量级 SQL 操作            |
 | 缓存     | Redis 7                  | 列表/分类/标签缓存         |
@@ -53,15 +53,22 @@ blogs/
 │   │   ├── post.go             # 文章 CRUD + 归档
 │   │   ├── category.go         # 分类 + 标签
 │   │   ├── comment.go          # 评论（嵌套回复 + 点赞）
-│   │   ├── dashboard.go        # 控制台统计摘要
+│   │   ├── dashboard.go        # 控制台统计摘要（含投资组合字段）
 │   │   ├── upload.go           # 图片上传
-│   │   └── gallery.go          # 照片墙（读取 uploads 目录）
+│   │   ├── gallery.go          # 照片墙（读取 uploads 目录）
+│   │   ├── asset.go            # 资产 CRUD + 手动改价
+│   │   ├── trade.go            # 交易流水 CRUD（超卖校验）
+│   │   └── invest.go           # 持仓/行情/价格历史/收益曲线
 │   ├── middleware/
 │   │   └── auth.go             # JWT 认证中间件
 │   ├── model/
 │   │   └── model.go            # 数据模型
 │   ├── pkg/
-│   │   └── jwt.go              # JWT 工具
+│   │   ├── jwt.go              # JWT 工具
+│   │   ├── portfolio/          # 持仓盈亏 + 价值曲线纯函数（含单测）
+│   │   └── quote/              # 行情子系统：Yahoo→Stooq→兜底三级降级（含单测）
+│   ├── service/
+│   │   └── snapshot.go         # 每日价格快照 cron + 启动补跑（一年回填在建资产时异步触发）
 │   ├── router/
 │   │   └── router.go           # 路由配置
 │   ├── uploads/                # 上传文件目录（git 忽略）
@@ -80,6 +87,7 @@ blogs/
         ├── components/
         │   ├── ui/             # shadcn/ui 基础组件
         │   ├── layout/         # 侧边栏/顶栏/移动端 Tab/命令面板
+        │   ├── charts/         # Recharts 封装（收益曲线 ValueChart）
         │   └── blog/           # 文章卡片/评论区/Markdown/分页
         ├── context/
         │   ├── AuthContext.tsx # 认证状态
@@ -89,8 +97,9 @@ blogs/
         │   ├── types.ts        # 共享类型
         │   └── format.ts       # 格式化工具
         └── pages/
-            ├── Dashboard.tsx   # 首页仪表盘（统计卡 + 图表）
+            ├── Dashboard.tsx   # 首页仪表盘（统计卡 + 收益曲线）
             ├── Login.tsx       # 登录
+            ├── invest/         # 投资页（持仓/交易/曲线/资产对话框）
             ├── blog/           # 文章列表/详情/归档/分类/标签
             ├── admin/          # 文章管理/分类管理/编辑器
             └── life/           # 生活页（照片墙）
@@ -149,7 +158,7 @@ npm run dev
 
 ### 4. 冒烟测试（可选）
 
-全栈跑起来后执行：`SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs`，七步链路（含评论发→删）全过输出 `SMOKE PASS ✅`。
+全栈跑起来后执行：`SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs`，八步链路（含评论发→删、投资链路：建资产→录交易→持仓校验→清理）全过输出 `STEP8 INVEST PASS` + `SMOKE PASS ✅`。
 
 ## API 文档
 
@@ -186,6 +195,23 @@ npm run dev
 | GET    | /api/gallery               | 照片墙列表         |
 | DELETE | /api/gallery/:filename     | 删除照片           |
 | GET    | /api/dashboard/summary     | 控制台统计摘要     |
+
+### 投资接口（需认证 Bearer Token）
+
+| 方法   | 路径                              | 说明                                       |
+| ------ | --------------------------------- | ------------------------------------------ |
+| GET    | /api/assets                       | 资产列表                                   |
+| POST   | /api/assets                       | 创建资产（symbol/name/type/price_source/currency） |
+| PUT    | /api/assets/:id                   | 更新资产名称                               |
+| DELETE | /api/assets/:id                   | 删除资产（有交易记录时 400）               |
+| PUT    | /api/assets/:id/price             | 手动更新现价（manual 资产）                |
+| GET    | /api/trades?asset_id=             | 交易流水（含资产联表，traded_at 倒序，上限 200） |
+| POST   | /api/trades                       | 录入交易（超卖校验，超卖 400）             |
+| DELETE | /api/trades/:id                   | 删除交易                                   |
+| GET    | /api/positions                    | 持仓 + CNY 汇总（加权平均成本，实时推导）  |
+| GET    | /api/quotes?symbols=A,B           | 批量行情（Yahoo→Stooq→本地兜底三级降级）   |
+| GET    | /api/price-history?symbol=&days=  | 单资产收盘价历史（days 默认 90，上限 365） |
+| GET    | /api/positions/history?days=      | 组合价值曲线（市值/成本/盈亏，CNY 计价）   |
 
 ### 请求示例
 
@@ -295,9 +321,45 @@ email      VARCHAR(255)
 created_at TIMESTAMP
 ```
 
+### assets / trades / price_history 表（投资模块，阶段 2）
+```sql
+-- assets：资产（个股/ETF/银行积存金/手动资产）
+id               BIGINT PK AUTO_INCREMENT
+symbol           VARCHAR(32) UNIQUE NOT NULL   -- 如 AAPL；积存金固定 GOLD_CNY_G
+name             VARCHAR(100) NOT NULL
+type             VARCHAR(16)  -- stock / etf / metal / other
+price_source     VARCHAR(32)  -- yahoo / computed_gold_cny / manual
+currency         VARCHAR(8)   -- USD / CNY
+current_price    DECIMAL(18,4) (可空，行情兜底价)
+price_updated_at DATETIME (可空)
+created_at       TIMESTAMP
+updated_at       TIMESTAMP
+
+-- trades：交易流水（持仓不落表，由 trades 实时推导）
+id         BIGINT PK AUTO_INCREMENT
+asset_id   BIGINT FK -> assets.id
+side       VARCHAR(8)   -- buy / sell
+quantity   DECIMAL(18,6) NOT NULL
+price      DECIMAL(18,4) NOT NULL   -- 成交价（历史事实，与行情价分离）
+fee        DECIMAL(12,2) DEFAULT 0
+traded_at  DATE NOT NULL
+note       TEXT
+created_at TIMESTAMP
+
+-- price_history：每日收盘价快照（symbol + date 唯一）
+id     BIGINT PK AUTO_INCREMENT
+symbol VARCHAR(32) NOT NULL
+date   DATE NOT NULL
+close  DECIMAL(18,4) NOT NULL
+UNIQUE KEY uk_symbol_date (symbol, date)
+```
+
 ## 功能特性
 
-- **控制台 Dashboard**：统计卡（文章/分类/评论/照片）+ 发布趋势图表
+- **控制台 Dashboard**：统计卡（投资组合/学习/习惯/文章/评论/照片）+ 近 30 天收益曲线
+- **投资组合**：资产/交易流水/加权平均成本持仓盈亏（CNY 汇总，美元资产按实时汇率折算）；银行积存金按 `GC=F ÷ 31.1035 × USDCNY` 换算克价
+- **行情三级降级**：Yahoo → Stooq → 本地兜底价（标记 stale），页面永不因行情失败而不可用；Redis 缓存 60 秒
+- **每日快照**：robfig/cron 每日 06:00（北京时间）快照自动跟踪资产（Yahoo/积存金）价格，启动时补跑漏掉的快照；创建自动跟踪资产时异步回填一年历史；收益曲线由快照收盘价 + 交易流水推导
 - **文章管理**：Markdown 编辑器（图片上传 + 预览），草稿/发布状态
 - **分类系统**：文章可按分类浏览，分类带 `section` 字段归属五大板块
 - **标签系统**：文章可打多个标签，支持按标签筛选
@@ -308,11 +370,11 @@ created_at TIMESTAMP
 - **Redis 缓存**：文章列表、分类、标签数据缓存 5-30 分钟
 - **JWT 认证**：登录签发 Token，有效期 72 小时（注册已下线，单用户）
 - **深浅色主题**：仪表盘风 UI，支持明暗切换；移动端底部 Tab 导航
-- **冒烟测试**：Playwright 脚本覆盖登录 → Dashboard → 博客 → 管理后台 → 生活页链路
+- **冒烟测试**：Playwright 脚本八步链路：登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路（建资产/录交易/持仓校验/清理）
 
 ## 环境变量配置
 
-> 注意：当前代码不自动加载 `.env`（`config.go` 纯 `os.Getenv`）。需通过 docker-compose `environment`、启动前 `export` 等方式注入环境变量，或等待阶段 2 恢复 `.env` 加载。
+> 注意：当前代码不自动加载 `.env`（`config.go` 纯 `os.Getenv`）。需通过 docker-compose `environment`、启动前 `export` 等方式注入环境变量；未注入时使用下表默认值。
 
 复制 `backend/.env.example` 为 `backend/.env` 后修改：
 
@@ -327,6 +389,7 @@ created_at TIMESTAMP
 | REDIS_PASS   | (空)                | Redis 密码         |
 | JWT_SECRET   | change-me-in...     | JWT 密钥 (务必修改) |
 | PORT         | 8080                | 后端端口           |
+| QUOTE_PROXY  | http://127.0.0.1:7890 | 行情上游 HTTP 代理（Yahoo/Stooq/汇率）；未设置或置空时使用该默认值（quote 子系统内部支持空代理直连，但 `envOr` 会把空值替换为默认） |
 
 ## 部署建议
 
