@@ -83,8 +83,17 @@ func (h *AssetHandler) Create(c *gin.Context) {
 	id, _ := res.LastInsertId()
 
 	if req.PriceSource == "yahoo" || req.PriceSource == "computed_gold_cny" {
-		// 回填是 best-effort 后台任务，用 WithoutCancel 脱离请求生命周期
-		go h.quotes.BackfillHistory(context.WithoutCancel(c.Request.Context()), symbol, 365)
+		// 回填是 best-effort 后台任务，用 WithoutCancel 脱离请求生命周期。
+		// 裸 goroutine 不经 Gin Recovery 覆盖，provider 走外部 HTTP+JSON 解析，
+		// 一旦 panic 会拖垮整个进程（爆炸半径含博客主站），故自旋 recover 兜底。
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("asset: backfill panic for %s: %v", symbol, r)
+				}
+			}()
+			h.quotes.BackfillHistory(context.WithoutCancel(c.Request.Context()), symbol, 365)
+		}()
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"id": id})
