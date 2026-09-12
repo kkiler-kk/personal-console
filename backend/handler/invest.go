@@ -1,0 +1,267 @@
+package handler
+
+import (
+	"context"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"blog/model"
+	"blog/pkg/portfolio"
+	"blog/pkg/quote"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jmoiron/sqlx"
+)
+
+// InvestHandler 提供持仓、批量报价、历史收盘价等只读投资视图。
+type InvestHandler struct {
+	db     *sqlx.DB
+	quotes *quote.Service
+}
+
+// NewInvestHandler 构造 InvestHandler（qs 与 AssetHandler 共享同一实例）。
+func NewInvestHandler(db *sqlx.DB, qs *quote.Service) *InvestHandler {
+	return &InvestHandler{db: db, quotes: qs}
+}
+
+// PositionRow 为单个资产的持仓行。指针字段在无行情/无昨收时为 nil。
+type PositionRow struct {
+	Asset          model.Asset `json:"asset"`
+	Quantity       float64     `json:"quantity"`
+	AvgCost        float64     `json:"avg_cost"`
+	CostBasis      float64     `json:"cost_basis"`
+	MarketValue    *float64    `json:"market_value"`
+	RealizedPnl    float64     `json:"realized_pnl"`
+	UnrealizedPnl  *float64    `json:"unrealized_pnl"`
+	Price          *float64    `json:"price"`
+	PreviousClose  *float64    `json:"previous_close"`
+	DayChangePct   *float64    `json:"day_change_pct"`
+	Stale          bool        `json:"stale"`
+	PriceUpdatedAt *time.Time  `json:"price_updated_at"`
+}
+
+// PositionsSummary 为组合层面的 CNY 汇总。DayPnlCNY 在全部行缺价时为 nil。
+type PositionsSummary struct {
+	TotalValueCNY float64  `json:"total_value_cny"`
+	TotalCostCNY  float64  `json:"total_cost_cny"`
+	TotalPnlCNY   float64  `json:"total_pnl_cny"`
+	TotalPnlPct   float64  `json:"total_pnl_pct"`
+	DayPnlCNY     *float64 `json:"day_pnl_cny"`
+	FxUSDCNY      float64  `json:"fx_usdcny"`
+}
+
+// PositionsResp 为 /api/positions 的响应体，亦供 dashboard（Task 2.8）复用。
+type PositionsResp struct {
+	Positions []PositionRow    `json:"positions"`
+	Summary   PositionsSummary `json:"summary"`
+}
+
+// ComputePositionsResponse 实时推导持仓与汇总（不落表）：
+//  1. 取全部资产；2. 取全部交易（IFNULL note，traded_at,id ASC）；
+//  3. 按 asset_id 分组折叠 + 批量报价；4. 取 USDCNY 汇率；
+//  5. 组装每行（price/previous_close 报价缺席时回退 asset.CurrentPrice）；
+//  6. 折算 CNY 汇总（USD×fx、CNY×1；day_pnl 任一价缺失跳过该行，全缺→nil）。
+//
+// 导出以供 dashboard 复用。行情失败只降级（Quotes/USDCNY 永不返 error）；
+// 仅 DB 查询或持仓折叠（未知 side）失败时返回 error。
+func (h *InvestHandler) ComputePositionsResponse(ctx context.Context) (*PositionsResp, error) {
+	assets := []model.Asset{}
+	if err := h.db.SelectContext(ctx, &assets,
+		"SELECT * FROM assets ORDER BY created_at"); err != nil {
+		return nil, err
+	}
+
+	trades := []model.Trade{}
+	if err := h.db.SelectContext(ctx, &trades,
+		"SELECT id, asset_id, side, quantity, price, fee, traded_at, IFNULL(note,'') AS note, created_at "+
+			"FROM trades ORDER BY traded_at, id"); err != nil {
+		return nil, err
+	}
+
+	byAsset := make(map[int64][]portfolio.Trade)
+	for _, t := range trades {
+		byAsset[t.AssetID] = append(byAsset[t.AssetID], portfolio.Trade{
+			Side:     t.Side,
+			Quantity: t.Quantity,
+			Price:    t.Price,
+			Fee:      t.Fee,
+		})
+	}
+
+	symbols := make([]string, 0, len(assets))
+	for _, a := range assets {
+		symbols = append(symbols, a.Symbol)
+	}
+	quotes := h.quotes.Quotes(ctx, symbols)
+	fx := h.quotes.USDCNY(ctx)
+
+	resp := &PositionsResp{Positions: []PositionRow{}}
+	var totalValue, totalCost, totalPnl, dayPnl float64
+	dayPnlHasData := false
+
+	for _, a := range assets {
+		q, hasQuote := quotes[a.Symbol]
+
+		// 价格指针：报价 → asset.CurrentPrice → nil
+		var pricePtr *float64
+		if hasQuote {
+			p := q.Price
+			pricePtr = &p
+		} else if a.CurrentPrice != nil {
+			pricePtr = a.CurrentPrice
+		}
+
+		pos, err := portfolio.ComputePosition(byAsset[a.ID], pricePtr)
+		if err != nil {
+			return nil, err
+		}
+
+		row := PositionRow{
+			Asset:          a,
+			Quantity:       pos.Quantity,
+			AvgCost:        pos.AvgCost,
+			CostBasis:      pos.CostBasis,
+			RealizedPnl:    pos.RealizedPnl,
+			PriceUpdatedAt: a.PriceUpdatedAt,
+		}
+		if pricePtr != nil {
+			mv := pos.MarketValue
+			up := pos.UnrealizedPnl
+			row.MarketValue = &mv
+			row.UnrealizedPnl = &up
+			row.Price = pricePtr
+		}
+		if hasQuote {
+			pc := q.PreviousClose
+			row.PreviousClose = &pc
+			row.Stale = q.Stale
+			if !q.UpdatedAt.IsZero() {
+				ua := q.UpdatedAt
+				row.PriceUpdatedAt = &ua
+			}
+			if pricePtr != nil && q.PreviousClose > 0 {
+				dcp := (*pricePtr - q.PreviousClose) / q.PreviousClose * 100
+				row.DayChangePct = &dcp
+			}
+		}
+		resp.Positions = append(resp.Positions, row)
+
+		// CNY 折算：USD 行 ×fx，CNY 行 ×1
+		fxFactor := 1.0
+		if a.Currency == "USD" {
+			fxFactor = fx
+		}
+		totalCost += row.CostBasis * fxFactor
+		if row.MarketValue != nil {
+			totalValue += *row.MarketValue * fxFactor
+			totalPnl += (*row.MarketValue - row.CostBasis) * fxFactor
+		}
+		if row.Price != nil && row.PreviousClose != nil && *row.PreviousClose > 0 {
+			dayPnl += row.Quantity * (*row.Price - *row.PreviousClose) * fxFactor
+			dayPnlHasData = true
+		}
+	}
+
+	resp.Summary.TotalValueCNY = totalValue
+	resp.Summary.TotalCostCNY = totalCost
+	resp.Summary.TotalPnlCNY = totalPnl
+	if totalCost > 0 {
+		resp.Summary.TotalPnlPct = totalPnl / totalCost * 100
+	}
+	resp.Summary.FxUSDCNY = fx
+	if dayPnlHasData {
+		resp.Summary.DayPnlCNY = &dayPnl
+	}
+	return resp, nil
+}
+
+// Positions 返回实时持仓与汇总。
+func (h *InvestHandler) Positions(c *gin.Context) {
+	resp, err := h.ComputePositionsResponse(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// Quotes 批量报价：?symbols= 逗号分隔（上限 50），按入参顺序稳定返回，缺席的 symbol 跳过。
+func (h *InvestHandler) Quotes(c *gin.Context) {
+	var symbols []string
+	for _, s := range strings.Split(c.Query("symbols"), ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			symbols = append(symbols, s)
+		}
+	}
+	if len(symbols) > 50 {
+		symbols = symbols[:50]
+	}
+
+	qmap := h.quotes.Quotes(c.Request.Context(), symbols)
+	out := make([]quote.Quote, 0, len(symbols))
+	for _, s := range symbols {
+		if q, ok := qmap[s]; ok {
+			out = append(out, q)
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"quotes": out})
+}
+
+// historyPoint 为 /api/price-history 的单点（date 为 YYYY-MM-DD 字符串）。
+type historyPoint struct {
+	Date  string  `json:"date"`
+	Close float64 `json:"close"`
+}
+
+// PriceHistory 返回某 symbol 最近 N 天收盘价：?symbol=&days=（默认 90，1..365）。
+func (h *InvestHandler) PriceHistory(c *gin.Context) {
+	symbol := strings.TrimSpace(c.Query("symbol"))
+	if symbol == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "symbol required"})
+		return
+	}
+	days := 90
+	if d := c.Query("days"); d != "" {
+		parsed, err := strconv.Atoi(d)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid days"})
+			return
+		}
+		days = parsed
+	}
+	if days < 1 {
+		days = 1
+	}
+	if days > 365 {
+		days = 365
+	}
+
+	rows, err := h.db.QueryContext(c.Request.Context(),
+		"SELECT date, close FROM price_history WHERE symbol=? AND date >= CURDATE() - INTERVAL ? DAY ORDER BY date",
+		symbol, days)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	points := []historyPoint{}
+	for rows.Next() {
+		var (
+			d     time.Time
+			close float64
+		)
+		if err := rows.Scan(&d, &close); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		points = append(points, historyPoint{Date: d.Format("2006-01-02"), Close: close})
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"points": points})
+}

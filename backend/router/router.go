@@ -4,6 +4,7 @@ import (
 	"blog/config"
 	"blog/handler"
 	"blog/middleware"
+	"blog/pkg/quote"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,12 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 	cmth := handler.NewCommentHandler(cfg, db)
 	dh := handler.NewDashboardHandler(db, rdb)
 	auth := middleware.AuthMiddleware(cfg.JWTSecret)
+
+	// invest: quote.Service 构造一次，由 asset/invest handler 共享
+	qs := quote.NewService(cfg, db, rdb)
+	ah := handler.NewAssetHandler(db, qs, rdb)
+	trh := handler.NewTradeHandler(db, rdb)
+	ih := handler.NewInvestHandler(db, qs)
 
 	// serve uploaded files
 	r.Static("/uploads", "./uploads")
@@ -88,6 +95,23 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 
 		// dashboard
 		protected.GET("/dashboard/summary", dh.Summary)
+
+		// invest: assets
+		protected.GET("/assets", ah.List)
+		protected.POST("/assets", ah.Create)
+		protected.PUT("/assets/:id", ah.Update)
+		protected.DELETE("/assets/:id", ah.Delete)
+		protected.PUT("/assets/:id/price", ah.UpdatePrice)
+
+		// invest: trades
+		protected.GET("/trades", trh.List)
+		protected.POST("/trades", trh.Create)
+		protected.DELETE("/trades/:id", trh.Delete)
+
+		// invest: positions / quotes / price history
+		protected.GET("/positions", ih.Positions)
+		protected.GET("/quotes", ih.Quotes)
+		protected.GET("/price-history", ih.PriceHistory)
 	}
 
 	return r

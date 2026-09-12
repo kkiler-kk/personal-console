@@ -90,7 +90,7 @@ func autoMigrate(db *sqlx.DB) {
 			symbol VARCHAR(32) NOT NULL UNIQUE,
 			name VARCHAR(100) NOT NULL,
 			type VARCHAR(16) NOT NULL DEFAULT 'stock',
-			price_source VARCHAR(16) NOT NULL DEFAULT 'yahoo',
+			price_source VARCHAR(32) NOT NULL DEFAULT 'yahoo',
 			currency VARCHAR(8) NOT NULL DEFAULT 'USD',
 			current_price DECIMAL(18,4),
 			price_updated_at DATETIME,
@@ -135,6 +135,19 @@ func autoMigrate(db *sqlx.DB) {
 	}
 	if colCount == 0 {
 		if _, err := db.Exec("ALTER TABLE categories ADD COLUMN section VARCHAR(20) NOT NULL DEFAULT 'blog'"); err != nil {
+			log.Fatalf("auto migrate failed: %v", err)
+		}
+	}
+
+	// widen assets.price_source to fit 'computed_gold_cny' (17 chars > legacy VARCHAR(16)); idempotent
+	var priceSourceLen int
+	if err := db.Get(&priceSourceLen, `
+		SELECT character_maximum_length FROM information_schema.columns
+		WHERE table_schema = DATABASE() AND table_name = 'assets' AND column_name = 'price_source'`); err != nil {
+		log.Fatalf("auto migrate failed: %v", err)
+	}
+	if priceSourceLen < 32 {
+		if _, err := db.Exec("ALTER TABLE assets MODIFY COLUMN price_source VARCHAR(32) NOT NULL DEFAULT 'yahoo'"); err != nil {
 			log.Fatalf("auto migrate failed: %v", err)
 		}
 	}
