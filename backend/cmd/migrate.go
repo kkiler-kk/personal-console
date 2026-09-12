@@ -118,6 +118,27 @@ func autoMigrate(db *sqlx.DB) {
 			close DECIMAL(18,4) NOT NULL,
 			UNIQUE KEY uk_symbol_date (symbol, date)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS language_profiles (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			lang VARCHAR(8) NOT NULL UNIQUE,
+			level VARCHAR(50) NOT NULL DEFAULT '',
+			goal TEXT,
+			note TEXT,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS study_sessions (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			lang VARCHAR(8) NOT NULL,
+			activity VARCHAR(20) NOT NULL DEFAULT 'other',
+			minutes INT NOT NULL DEFAULT 0,
+			session_date DATE NOT NULL,
+			note VARCHAR(200),
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			KEY idx_session_date (session_date),
+			KEY idx_lang_date (lang, session_date)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 	}
 
 	for _, sql := range statements {

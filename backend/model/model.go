@@ -114,3 +114,22 @@ type PriceHistory struct {
 	Date   time.Time `json:"date" db:"date"`
 	Close  float64   `json:"close" db:"close"`
 }
+
+type LanguageProfile struct {
+	ID        int64     `json:"id" db:"id"`
+	Lang      string    `json:"lang" db:"lang"`
+	Level     string    `json:"level" db:"level"`
+	Goal      string    `json:"goal" db:"goal"`
+	Note      string    `json:"note" db:"note"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type StudySession struct {
+	ID          int64     `json:"id" db:"id"`
+	Lang        string    `json:"lang" db:"lang"`
+	Activity    string    `json:"activity" db:"activity"`
+	Minutes     int       `json:"minutes" db:"minutes"`
+	SessionDate time.Time `json:"session_date" db:"session_date"`
+	Note        string    `json:"note" db:"note"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+}
