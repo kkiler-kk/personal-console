@@ -169,7 +169,8 @@ if checked, total, err := h.habit.TodayCounts(c.Request.Context()); err != nil {
 8. **smoke.mjs**：资产创建挪进 try（清理 guaranteed）；删交易补 ok() 检查 WARN；STEP8 加 `pe_ttm` 键存在性形状断言一行
 9. **学习模块批次（阶段 3 终审移交）**：minutes 上限（后端 binding `lte=14400` + 前端 SessionDialog canSubmit 同上限）；date 禁未来（前端 input `max={today}` + 后端 CreateSession 拒绝 date>今天 400）；StudyCalendar 增「已打卡」档（minutes=0 但有记录 → 可辨样式 + 图例项）；LearnPage profilesQ 补一行 isError 提示；SessionDialog 两个 Select 的 Label 补 htmlFor/id；CLAUDE.md learn handler 摘要补 "profiles list/upsert"
 10. **投资模块批次（阶段 2.5 终审移交）**：fetchPEs 加有界 ctx 预算（12-15s，防挂死代理下 positions 延迟无上界）；fc 排空注释措辞修正
-11. **可选（时间富余才做，报告注明）**：crumb compare-and-invalidate；v7 error 字段解析；learn.go IFNULL(updated_at,CURRENT_TIMESTAMP) 时区收敛；smoke 删交易/清理失败 WARN 补 ok() 检查
+11. **必修组（4.2/4.3 终审移交）**：① 后端 GET /api/habits 行加 `checked_today bool`（JSON `checked_today`；TodayCounts 同款 Go 本地日期传参 JOIN/子查询今日 habit_logs；schema 加法）+ TodayCounts 的 checked 加 archived=FALSE 过滤（口径一致）；前端 types.Habit 加 checked_today、HabitSection 改用该字段渲染当日状态并**移除 localStorage hack**（键清理逻辑一并删）② dashboard.go Summary 写缓存前加 `if c.Request.Context().Err() == nil` 守卫（中断请求不缓存零值）
+12. **可选（时间富余才做，报告注明）**：crumb compare-and-invalidate；v7 error 字段解析；learn.go IFNULL(updated_at,CURRENT_TIMESTAMP) 时区收敛；smoke 删交易/清理失败 WARN 补 ok() 检查；compactWindowStart 公式提取共享 util；热力卡 isError 时收益曲线卡 sm:col-span-3 补位
 - [ ] **验证**：backend build/vet/test 全绿；frontend tsc×2/build 零错误；起 8090+3001 手动 curl 抽查错误态（停后端→前端查询 isError→ErrorState 渲染路径由 build+tsc 保证，浏览器级验证留冒烟）；ValueCurve carry-in 用 curl 对照（造窗口前 close 数据验证首日 value 用 carry-in 价）
 - [ ] **Commit** `fix: site-wide polish — error states, a11y, curve carry-in, single quote service`
 
