@@ -84,6 +84,40 @@ func autoMigrate(db *sqlx.DB) {
 			UNIQUE KEY uk_comment_email (comment_id, email),
 			FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS assets (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			symbol VARCHAR(32) NOT NULL UNIQUE,
+			name VARCHAR(100) NOT NULL,
+			type VARCHAR(16) NOT NULL DEFAULT 'stock',
+			price_source VARCHAR(16) NOT NULL DEFAULT 'yahoo',
+			currency VARCHAR(8) NOT NULL DEFAULT 'USD',
+			current_price DECIMAL(18,4),
+			price_updated_at DATETIME,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS trades (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			asset_id BIGINT NOT NULL,
+			side VARCHAR(8) NOT NULL,
+			quantity DECIMAL(18,6) NOT NULL,
+			price DECIMAL(18,4) NOT NULL,
+			fee DECIMAL(12,2) NOT NULL DEFAULT 0,
+			traded_at DATE NOT NULL,
+			note TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (asset_id) REFERENCES assets(id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS price_history (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			symbol VARCHAR(32) NOT NULL,
+			date DATE NOT NULL,
+			close DECIMAL(18,4) NOT NULL,
+			UNIQUE KEY uk_symbol_date (symbol, date)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 	}
 
 	for _, sql := range statements {

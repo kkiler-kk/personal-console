@@ -17,6 +17,8 @@ type Config struct {
 
 	JWTSecret string
 	Port      string
+
+	QuoteProxy string
 }
 
 func Load() *Config {
@@ -33,6 +35,8 @@ func Load() *Config {
 
 		JWTSecret: envOr("JWT_SECRET", "change-me-in-production"),
 		Port:      envOr("PORT", "8080"),
+
+		QuoteProxy: envOr("QUOTE_PROXY", "http://127.0.0.1:7890"),
 	}
 }
 

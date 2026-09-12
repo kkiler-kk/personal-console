@@ -80,3 +80,37 @@ type CommentLike struct {
 	Email     string    `json:"email" db:"email"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
+
+type Asset struct {
+	ID             int64      `json:"id" db:"id"`
+	Symbol         string     `json:"symbol" db:"symbol"`
+	Name           string     `json:"name" db:"name"`
+	Type           string     `json:"type" db:"type"`
+	PriceSource    string     `json:"price_source" db:"price_source"`
+	Currency       string     `json:"currency" db:"currency"`
+	CurrentPrice   *float64   `json:"current_price" db:"current_price"`
+	PriceUpdatedAt *time.Time `json:"price_updated_at" db:"price_updated_at"`
+	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+type Trade struct {
+	ID        int64     `json:"id" db:"id"`
+	AssetID   int64     `json:"asset_id" db:"asset_id"`
+	Side      string    `json:"side" db:"side"`
+	Quantity  float64   `json:"quantity" db:"quantity"`
+	Price     float64   `json:"price" db:"price"`
+	Fee       float64   `json:"fee" db:"fee"`
+	TradedAt  time.Time `json:"traded_at" db:"traded_at"`
+	Note      string    `json:"note" db:"note"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+
+	Asset *Asset `json:"asset,omitempty" db:"-"`
+}
+
+type PriceHistory struct {
+	ID     int64     `json:"id" db:"id"`
+	Symbol string    `json:"symbol" db:"symbol"`
+	Date   time.Time `json:"date" db:"date"`
+	Close  float64   `json:"close" db:"close"`
+}
