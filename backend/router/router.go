@@ -1,0 +1,91 @@
+package router
+
+import (
+	"blog/config"
+	"blog/handler"
+	"blog/middleware"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
+	"github.com/jmoiron/sqlx"
+)
+
+func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
+	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
+
+	// handlers
+	uh := handler.NewUserHandler(cfg, db)
+	ph := handler.NewPostHandler(cfg, db, rdb)
+	ch := handler.NewCategoryHandler(cfg, db, rdb)
+	th := handler.NewTagHandler(cfg, db, rdb)
+	uh2 := handler.NewUploadHandler()
+	gh := handler.NewGalleryHandler()
+	cmth := handler.NewCommentHandler(cfg, db)
+	auth := middleware.AuthMiddleware(cfg.JWTSecret)
+
+	// serve uploaded files
+	r.Static("/uploads", "./uploads")
+
+	// public api
+	api := r.Group("/api")
+	{
+		// auth
+		api.POST("/auth/register", uh.Register)
+		api.POST("/auth/login", uh.Login)
+
+		// posts (public)
+		api.GET("/posts/archive", ph.Archive)
+		api.GET("/posts", ph.List)
+		api.GET("/posts/:slug", ph.GetBySlug)
+
+		// categories
+		api.GET("/categories", ch.List)
+
+		// tags
+		api.GET("/tags", th.List)
+
+		// comments (public)
+		api.GET("/posts/:slug/comments", cmth.List)
+		api.POST("/posts/:slug/comments", cmth.Create)
+		api.POST("/comments/:id/like", cmth.Like)
+		api.GET("/comments/:id/like", cmth.CheckLike)
+		api.DELETE("/comments/:id", cmth.Delete)
+	}
+
+	// protected api
+	protected := r.Group("/api")
+	protected.Use(auth)
+	{
+		// user
+		protected.GET("/user/profile", uh.Profile)
+		protected.PUT("/user/profile", uh.UpdateProfile)
+
+		// posts (admin)
+		protected.POST("/posts", ph.Create)
+		protected.PUT("/posts/:id", ph.Update)
+		protected.DELETE("/posts/:id", ph.Delete)
+		protected.GET("/admin/posts", ph.AdminList)
+
+		// categories (admin)
+		protected.POST("/categories", ch.Create)
+		protected.PUT("/categories/:id", ch.Update)
+		protected.DELETE("/categories/:id", ch.Delete)
+
+		// upload (admin)
+		protected.POST("/upload", uh2.Upload)
+
+		// gallery (admin)
+		protected.GET("/gallery", gh.List)
+		protected.DELETE("/gallery/:filename", gh.Delete)
+	}
+
+	return r
+}

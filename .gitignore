@@ -5,3 +5,7 @@ frontend/node_modules
 frontend/dist
 *.log
 .DS_Store
+backups/
+.claude/settings.local.json
+# 含个人隐私内容（婚礼脚本权限、人名、个人目录路径），不入库
+.claude/settings.json

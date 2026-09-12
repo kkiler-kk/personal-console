@@ -1,0 +1,151 @@
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"time"
+
+	"blog/config"
+	"blog/model"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
+	"github.com/jmoiron/sqlx"
+)
+
+type CategoryHandler struct {
+	db    *sqlx.DB
+	redis *redis.Client
+}
+
+func NewCategoryHandler(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *CategoryHandler {
+	return &CategoryHandler{db: db, redis: rdb}
+}
+
+func (h *CategoryHandler) List(c *gin.Context) {
+	if cached, err := h.redis.Get(context.Background(), "categories:list").Result(); err == nil {
+		c.Data(http.StatusOK, "application/json", []byte(cached))
+		return
+	}
+
+	var categories []model.Category
+	err := h.db.Select(&categories, "SELECT * FROM categories ORDER BY name")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp := gin.H{"categories": categories}
+	if data, err := json.Marshal(resp); err == nil {
+		h.redis.Set(context.Background(), "categories:list", data, 30*time.Minute)
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CategoryHandler) Create(c *gin.Context) {
+	var req struct {
+		Name string `json:"name" binding:"required"`
+		Slug string `json:"slug" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := h.db.Exec("INSERT INTO categories (name, slug) VALUES (?, ?)", req.Name, req.Slug)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "category already exists"})
+		return
+	}
+
+	id, _ := result.LastInsertId()
+	h.redis.Del(context.Background(), "categories:list")
+
+	c.JSON(http.StatusCreated, gin.H{"id": id})
+}
+
+func (h *CategoryHandler) Update(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+	}
+	if err = c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	_, err = h.db.Exec("UPDATE categories SET name = ?, slug = ? WHERE id = ?", req.Name, req.Slug, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.redis.Del(context.Background(), "categories:list")
+	c.JSON(http.StatusOK, gin.H{"message": "category updated"})
+}
+
+func (h *CategoryHandler) Delete(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	_, err = h.db.Exec("DELETE FROM categories WHERE id = ?", id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.redis.Del(context.Background(), "categories:list")
+	c.JSON(http.StatusOK, gin.H{"message": "category deleted"})
+}
+
+// Tag handlers
+
+type TagHandler struct {
+	db    *sqlx.DB
+	redis *redis.Client
+}
+
+func NewTagHandler(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *TagHandler {
+	return &TagHandler{db: db, redis: rdb}
+}
+
+func (h *TagHandler) List(c *gin.Context) {
+	if cached, err := h.redis.Get(context.Background(), "tags:list").Result(); err == nil {
+		c.Data(http.StatusOK, "application/json", []byte(cached))
+		return
+	}
+
+	var tags []struct {
+		model.Tag
+		Count int `json:"count" db:"count"`
+	}
+	err := h.db.Select(&tags, `
+		SELECT t.id, t.name, COUNT(pt.post_id) as count
+		FROM tags t
+		LEFT JOIN post_tags pt ON t.id = pt.tag_id
+		GROUP BY t.id, t.name
+		ORDER BY count DESC`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp := gin.H{"tags": tags}
+	if data, err := json.Marshal(resp); err == nil {
+		h.redis.Set(context.Background(), "tags:list", data, 30*time.Minute)
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

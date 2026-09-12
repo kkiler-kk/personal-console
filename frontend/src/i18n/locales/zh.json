@@ -1,0 +1,169 @@
+{
+  "nav": {
+    "home": "首页",
+    "archive": "归档",
+    "admin": "管理",
+    "login": "登录",
+    "logout": "退出"
+  },
+  "brand": "我的博客",
+  "hero": {
+    "title": "我的博客",
+    "subtitle": "关于代码、系统与发布艺术的思考。"
+  },
+  "footer": "使用 React + Go + 咖啡因构建",
+  "home": {
+    "noPosts": "还没有文章。是时候写点什么了！"
+  },
+  "pagination": {
+    "prev": "← 上一页",
+    "next": "下一页 →"
+  },
+  "postDetail": {
+    "notFound": {
+      "title": "段错误 (core dumped)",
+      "message": "你找的文章不存在。",
+      "message2": "也许它被垃圾回收了。",
+      "goHome": "回首页 →"
+    },
+    "views": "{{count}} 次阅读"
+  },
+  "archive": {
+    "title": "归档",
+    "empty": "还没有文章。归档是空的。"
+  },
+  "auth": {
+    "login": "欢迎回来",
+    "register": "创建账号",
+    "username": "用户名",
+    "password": "密码",
+    "nickname": "昵称",
+    "loginBtn": "登录",
+    "registerBtn": "注册",
+    "loginSuccess": "注册成功，请登录",
+    "authenticating": "认证中...",
+    "hasAccount": "已有账号？",
+    "noAccount": "还没有账号？"
+  },
+  "admin": {
+    "posts": "文章",
+    "newPost": "新建文章",
+    "categories": "分类",
+    "all": "全部",
+    "published": "已发布",
+    "draft": "草稿",
+    "title": "标题",
+    "status": "状态",
+    "views": "阅读",
+    "date": "日期",
+    "actions": "操作",
+    "edit": "编辑",
+    "delete": "删除",
+    "deleteConfirm": "删除这篇文章？此操作无法撤销。",
+    "deleteRevert": "此操作无法撤销",
+    "deleteCategoryConfirm": "删除这个分类？",
+    "saved": "保存成功！",
+    "newPostTitle": "新建文章",
+    "editPostTitle": "编辑文章",
+    "summary": "摘要",
+    "content": "内容 (Markdown)",
+    "category": "分类",
+    "none": "无",
+    "tags": "标签（逗号分隔）",
+    "tagsPlaceholder": "React, Go, 教程",
+    "publish": "发布",
+    "update": "更新",
+    "saving": "发布中...",
+    "cancel": "取消",
+    "categoryName": "名称",
+    "categorySlug": "别名",
+    "add": "添加",
+    "categoryRequired": "请填写名称和别名",
+    "authenticating": "认证中..."
+  },
+  "profile": {
+    "title": "个人设置",
+    "bio": "简介",
+    "bioPlaceholder": "介绍一下自己...",
+    "uploadAvatar": "上传头像",
+    "uploading": "上传中...",
+    "uploadSuccess": "上传成功",
+    "avatarHint": "支持 JPG, PNG, GIF, WebP，最大 10MB",
+    "save": "保存"
+  },
+  "loading": {
+    "compiling": "编译中...",
+    "npmInstall": "npm install happiness...",
+    "gitFetch": "git fetch motivation...",
+    "cargoBuild": "cargo build --release...",
+    "goRun": "go run main.go...",
+    "fetching": "从远端拉取中...",
+    "loadingModules": "加载模块中...",
+    "gitLog": "git log --oneline..."
+  },
+  "commandPalette": {
+    "placeholder": "输入命令或搜索...",
+    "noResults": "未找到结果",
+    "goHome": "回到首页",
+    "archive": "归档",
+    "admin": "管理后台",
+    "login": "登录 / 注册",
+    "toggleTheme": "切换主题",
+    "themeLight": "浅色主题",
+    "themeDark": "深色主题",
+    "themeTerminal": "终端模式 (iTerm2)",
+    "openTerminal": "打开终端"
+  },
+  "langToggle": "切换到英文",
+  "categoryPosts": {
+    "noPosts": "该分类下还没有文章。",
+    "loading": "解析分类中..."
+  },
+  "tagPosts": {
+    "noPosts": "还没有带这个标签的文章。",
+    "loading": "搜索标签中...",
+    "tag": "标签"
+  },
+  "gallery": {
+    "title": "图库",
+    "upload": "上传图片",
+    "uploading": "上传中...",
+    "uploadSuccess": "上传成功",
+    "uploadFailed": "上传失败",
+    "uploadComplete": "上传完成",
+    "empty": "还没有上传任何图片。",
+    "deleteConfirm": "删除这张图片？",
+    "deleted": "已删除",
+    "copyUrl": "复制链接",
+    "copied": "已复制！"
+  },
+  "comments": {
+    "title": "评论",
+    "noComments": "还没有评论。来发表第一条评论吧！",
+    "name": "昵称",
+    "namePlaceholder": "匿名",
+    "email": "邮箱",
+    "emailPlaceholder": "you@example.com",
+    "content": "评论内容",
+    "contentPlaceholder": "写下你的评论...",
+    "submit": "发表",
+    "reply": "回复",
+    "cancelReply": "取消",
+    "like": "点赞",
+    "liked": "已赞",
+    "delete": "删除",
+    "deleteConfirm": "删除这条评论？",
+    "submitting": "提交中...",
+    "replyingTo": "回复",
+    "loadMore": "加载更多",
+    "emailRequired": "邮箱是必填的",
+    "contentRequired": "内容不能为空",
+    "posted": "评论发表成功！",
+    "replyPosted": "回复成功！",
+    "deleted": "评论已删除",
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}}分钟前",
+    "hoursAgo": "{{count}}小时前",
+    "daysAgo": "{{count}}天前"
+  }
+}

@@ -1,0 +1,169 @@
+{
+  "nav": {
+    "home": "Home",
+    "archive": "Archive",
+    "admin": "Admin",
+    "login": "Login",
+    "logout": "Logout"
+  },
+  "brand": "My Blog",
+  "hero": {
+    "title": "My Blog",
+    "subtitle": "Thoughts on code, systems, and the art of shipping."
+  },
+  "footer": "Built with React + Go + caffeine",
+  "home": {
+    "noPosts": "No posts yet. Time to write something!"
+  },
+  "pagination": {
+    "prev": "← Prev",
+    "next": "Next →"
+  },
+  "postDetail": {
+    "notFound": {
+      "title": "Segmentation Fault (core dumped)",
+      "message": "The post you're looking for doesn't exist.",
+      "message2": "Maybe it was garbage collected.",
+      "goHome": "Go home →"
+    },
+    "views": "{{count}} views"
+  },
+  "archive": {
+    "title": "Archive",
+    "empty": "No posts yet. The archive is empty."
+  },
+  "auth": {
+    "login": "Welcome Back",
+    "register": "Create Account",
+    "username": "Username",
+    "password": "Password",
+    "nickname": "Nickname",
+    "loginBtn": "Login",
+    "registerBtn": "Register",
+    "loginSuccess": "Registration successful, please login",
+    "authenticating": "Authenticating...",
+    "hasAccount": "Already have an account?",
+    "noAccount": "Don't have an account?"
+  },
+  "admin": {
+    "posts": "Posts",
+    "newPost": "New Post",
+    "categories": "Categories",
+    "all": "All",
+    "published": "Published",
+    "draft": "Draft",
+    "title": "Title",
+    "status": "Status",
+    "views": "Views",
+    "date": "Date",
+    "actions": "Actions",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this post? There is no git revert for this.",
+    "deleteRevert": "There's no git revert for this",
+    "deleteCategoryConfirm": "Delete this category?",
+    "saved": "Saved!",
+    "newPostTitle": "New Post",
+    "editPostTitle": "Edit Post",
+    "summary": "Summary",
+    "content": "Content (Markdown)",
+    "category": "Category",
+    "none": "None",
+    "tags": "Tags (comma separated)",
+    "tagsPlaceholder": "React, Go, Tutorial",
+    "publish": "Publish",
+    "update": "Update",
+    "saving": "git push...",
+    "cancel": "Cancel",
+    "categoryName": "Name",
+    "categorySlug": "Slug",
+    "add": "Add",
+    "categoryRequired": "Please fill in both name and slug",
+    "authenticating": "authenticating..."
+  },
+  "profile": {
+    "title": "Profile",
+    "bio": "Bio",
+    "bioPlaceholder": "Tell us about yourself...",
+    "uploadAvatar": "Upload Avatar",
+    "uploading": "Uploading...",
+    "uploadSuccess": "Upload successful",
+    "avatarHint": "Supports JPG, PNG, GIF, WebP. Max 10MB",
+    "save": "Save"
+  },
+  "loading": {
+    "compiling": "compiling...",
+    "npmInstall": "npm install happiness...",
+    "gitFetch": "git fetch motivation...",
+    "cargoBuild": "cargo build --release...",
+    "goRun": "go run main.go...",
+    "fetching": "fetching from origin...",
+    "loadingModules": "loading modules...",
+    "gitLog": "git log --oneline..."
+  },
+  "commandPalette": {
+    "placeholder": "Type a command or search...",
+    "noResults": "No results for",
+    "goHome": "Go to Home",
+    "archive": "Archive",
+    "admin": "Admin Panel",
+    "login": "Login / Register",
+    "toggleTheme": "Toggle Theme",
+    "themeLight": "Light Theme",
+    "themeDark": "Dark Theme",
+    "themeTerminal": "Terminal Mode (iTerm2)",
+    "openTerminal": "Open Terminal"
+  },
+  "langToggle": "Switch to English",
+  "categoryPosts": {
+    "noPosts": "No posts in this category.",
+    "loading": "resolving category..."
+  },
+  "tagPosts": {
+    "noPosts": "No posts with this tag.",
+    "loading": "looking up tag...",
+    "tag": "Tag"
+  },
+  "gallery": {
+    "title": "Gallery",
+    "upload": "Upload Image",
+    "uploading": "Uploading...",
+    "uploadSuccess": "Upload successful",
+    "uploadFailed": "Upload failed",
+    "uploadComplete": "Upload complete",
+    "empty": "No images uploaded yet.",
+    "deleteConfirm": "Delete this image?",
+    "deleted": "Deleted",
+    "copyUrl": "Copy URL",
+    "copied": "Copied!"
+  },
+  "comments": {
+    "title": "Comments",
+    "noComments": "No comments yet. Be the first to share your thoughts!",
+    "name": "Name",
+    "namePlaceholder": "Anonymous",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "content": "Comment",
+    "contentPlaceholder": "Write your comment...",
+    "submit": "Submit",
+    "reply": "Reply",
+    "cancelReply": "Cancel",
+    "like": "Like",
+    "liked": "Liked",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this comment?",
+    "submitting": "Submitting...",
+    "replyingTo": "Replying to",
+    "loadMore": "Load more",
+    "emailRequired": "Email is required",
+    "contentRequired": "Content is required",
+    "posted": "Comment posted!",
+    "replyPosted": "Reply posted!",
+    "deleted": "Comment deleted",
+    "justNow": "just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  }
+}
