@@ -39,6 +39,7 @@ export interface PositionRow {
   market_value: number | null; realized_pnl: number; unrealized_pnl: number | null
   price: number | null; previous_close: number | null; day_change_pct: number | null
   stale: boolean; price_updated_at: string | null
+  invalid?: boolean
 }
 export interface PositionsSummary {
   total_value_cny: number; total_cost_cny: number; total_pnl_cny: number

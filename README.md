@@ -376,7 +376,7 @@ UNIQUE KEY uk_symbol_date (symbol, date)
 
 > 注意：当前代码不自动加载 `.env`（`config.go` 纯 `os.Getenv`）。需通过 docker-compose `environment`、启动前 `export` 等方式注入环境变量；未注入时使用下表默认值。
 
-复制 `backend/.env.example` 为 `backend/.env` 后修改：
+变量清单参考 `backend/.env.example`（注意：当前代码不自动加载 `.env`，需以环境变量方式注入）：
 
 | 变量         | 默认值              | 说明               |
 | ------------ | ------------------- | ------------------ |

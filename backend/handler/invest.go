@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ func NewInvestHandler(db *sqlx.DB, qs *quote.Service) *InvestHandler {
 }
 
 // PositionRow 为单个资产的持仓行。指针字段在无行情/无昨收时为 nil。
+// Invalid=true 表示该资产的交易序列无法折叠（如超卖），数值字段已降级为零值。
 type PositionRow struct {
 	Asset          model.Asset `json:"asset"`
 	Quantity       float64     `json:"quantity"`
@@ -40,6 +42,7 @@ type PositionRow struct {
 	DayChangePct   *float64    `json:"day_change_pct"`
 	Stale          bool        `json:"stale"`
 	PriceUpdatedAt *time.Time  `json:"price_updated_at"`
+	Invalid        bool        `json:"invalid"`
 }
 
 // PositionsSummary 为组合层面的 CNY 汇总。DayPnlCNY 在全部行缺价时为 nil。
@@ -60,12 +63,15 @@ type PositionsResp struct {
 
 // ComputePositionsResponse 实时推导持仓与汇总（不落表）：
 //  1. 取全部资产；2. 取全部交易（IFNULL note，traded_at,id ASC）；
-//  3. 按 asset_id 分组折叠 + 批量报价；4. 取 USDCNY 汇率；
+//  3. 按 asset_id 分组折叠 + 批量报价（manual 资产不送行情，手输价即权威价，
+//     不参与 stale 判定，也避免 pkg/quote 的 writeBackPrice 覆盖用户输入）；
+//  4. 取 USDCNY 汇率；
 //  5. 组装每行（price/previous_close 报价缺席时回退 asset.CurrentPrice）；
 //  6. 折算 CNY 汇总（USD×fx、CNY×1；day_pnl 任一价缺失跳过该行，全缺→nil）。
 //
 // 导出以供 dashboard 复用。行情失败只降级（Quotes/USDCNY 永不返 error）；
-// 仅 DB 查询或持仓折叠（未知 side）失败时返回 error。
+// 单资产持仓折叠失败（如超卖序列）降级为 Invalid 行、不计入 summary（端点仍 200）；
+// 仅 DB 查询失败时返回 error。
 func (h *InvestHandler) ComputePositionsResponse(ctx context.Context) (*PositionsResp, error) {
 	assets := []model.Asset{}
 	if err := h.db.SelectContext(ctx, &assets,
@@ -90,9 +96,12 @@ func (h *InvestHandler) ComputePositionsResponse(ctx context.Context) (*Position
 		})
 	}
 
+	// I-1: 仅非 manual 资产送 Quotes，防止 Yahoo 静默覆盖用户手输价
 	symbols := make([]string, 0, len(assets))
 	for _, a := range assets {
-		symbols = append(symbols, a.Symbol)
+		if a.PriceSource != "manual" {
+			symbols = append(symbols, a.Symbol)
+		}
 	}
 	quotes := h.quotes.Quotes(ctx, symbols)
 	fx := h.quotes.USDCNY(ctx)
@@ -102,9 +111,13 @@ func (h *InvestHandler) ComputePositionsResponse(ctx context.Context) (*Position
 	dayPnlHasData := false
 
 	for _, a := range assets {
+		isManual := a.PriceSource == "manual"
 		q, hasQuote := quotes[a.Symbol]
+		if isManual {
+			hasQuote = false // 手动价是权威值：manual 资产永不使用自动行情，也不打 stale 标记
+		}
 
-		// 价格指针：报价 → asset.CurrentPrice → nil
+		// 价格指针：报价 → asset.CurrentPrice → nil（manual 只有 CurrentPrice 一条路）
 		var pricePtr *float64
 		if hasQuote {
 			p := q.Price
@@ -115,7 +128,11 @@ func (h *InvestHandler) ComputePositionsResponse(ctx context.Context) (*Position
 
 		pos, err := portfolio.ComputePosition(byAsset[a.ID], pricePtr)
 		if err != nil {
-			return nil, err
+			// 单资产折叠失败（如删单后剩余序列超卖）只降级该行，不整体 500——
+			// 对齐 pkg/portfolio ValueCurve 的逐资产 skip 容错哲学。
+			log.Printf("positions: asset %s(%d) skipped: %v", a.Symbol, a.ID, err)
+			resp.Positions = append(resp.Positions, PositionRow{Asset: a, Invalid: true})
+			continue // invalid 行不计入 summary
 		}
 
 		row := PositionRow{

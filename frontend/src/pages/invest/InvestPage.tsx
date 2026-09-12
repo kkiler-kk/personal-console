@@ -146,7 +146,8 @@ export default function InvestPage() {
                 <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-10">还没有资产，点右上角「添加资产」开始</TableCell></TableRow>
               ) : positions.map((p) => {
                 const a = p.asset
-                const cleared = p.quantity === 0
+                const invalid = p.invalid === true
+                const cleared = !invalid && p.quantity === 0
                 return (
                   <TableRow key={a.id} className={cleared ? "opacity-60" : undefined}>
                     <TableCell>
@@ -154,7 +155,11 @@ export default function InvestPage() {
                         <div className="min-w-0">
                           <div className="font-medium flex items-center gap-1.5">
                             <span className="truncate">{a.name}</span>
-                            {cleared && <Badge variant="secondary">已清仓</Badge>}
+                            {invalid ? (
+                              <Badge variant="destructive" title="交易序列存在超卖，请检查该资产的流水">数据异常</Badge>
+                            ) : cleared ? (
+                              <Badge variant="secondary">已清仓</Badge>
+                            ) : null}
                           </div>
                           <div className="text-xs text-muted-foreground tnum">{a.symbol}</div>
                         </div>
