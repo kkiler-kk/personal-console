@@ -48,10 +48,15 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
     if (p === "gold") {
       setSymbol(GOLD_SYMBOL); setType("metal"); setCurrency("CNY")
       setName((n) => n.trim() === "" ? "银行积存金" : n)
-    } else if (p === "us") {
-      setType("stock"); setCurrency("USD")
-    } else if (p === "ashare") {
-      setType("stock"); setCurrency("CNY")
+    } else {
+      // 清除 gold 预设自动填充的残留值（仅当值恰为默认填充，不吞用户手动输入）
+      setSymbol((s) => s === GOLD_SYMBOL ? "" : s)
+      setName((n) => n === "银行积存金" ? "" : n)
+      if (p === "us") {
+        setType("stock"); setCurrency("USD")
+      } else if (p === "ashare") {
+        setType("stock"); setCurrency("CNY")
+      }
     }
   }
 
@@ -94,7 +99,7 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
   // A 股代码提交前轻校验：形态不符仅 toast 提示，不 return（后端仍是权威）
   const handleSubmit = () => {
     if (preset === "ashare" && !ASHARE_SYMBOL_RE.test(symbol.trim())) {
-      toast.warning("A 股代码通常为 600519.SS（沪）/ 000001.SZ（深），已按原样提交")
+      toast.warning("A 股代码通常为 600519.SS（沪）/ 000001.SZ（深），已提交（代码统一为大写）")
     }
     create.mutate()
   }
