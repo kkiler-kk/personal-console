@@ -19,7 +19,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   if (token) headers["Authorization"] = `Bearer ${token}`
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers })
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, { ...options, headers })
+  } catch {
+    // 断网/DNS 失败等网络层异常：包装为 ApiError(0)，保证下游 instanceof ApiError 判断一致
+    throw new ApiError(0, "网络连接失败，请检查后端服务")
+  }
   // 有意使用 any：后端各端点响应形态不一，且需兼容 204/空 body 的宽松解析
   let data: any = null
   try { data = await res.json() } catch { /* 204 等无 body 场景 */ }

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { api } from "@/lib/api"
+import { api, ApiError } from "@/lib/api"
 import type { AuthUser } from "@/lib/types"
 
 interface AuthCtx {
@@ -28,7 +28,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const u = { id: p.id, username: p.username, nickname: p.nickname, avatar: p.avatar }
         setUser(u); localStorage.setItem("user", JSON.stringify(u))
       })
-      .catch(() => { setToken(null); setUser(null); localStorage.removeItem("token"); localStorage.removeItem("user") })
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 401) {
+          // token 确认失效：同步清理 React state（api.ts 的 401 处理器已清 localStorage 并跳转）
+          setToken(null); setUser(null)
+          localStorage.removeItem("token"); localStorage.removeItem("user")
+        }
+        // 网络错误/5xx：保留会话，下次请求自然重试
+      })
   }, [token])
 
   const login = async (username: string, password: string) => {
