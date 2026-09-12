@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"blog/config"
@@ -78,14 +79,25 @@ const (
 	defaultHTTPTimeout = 10 * time.Second
 )
 
-// Service 为行情服务。构造后无共享可变状态：providers/client/db/rdb 均并发安全，
-// 可被多 goroutine 同时调用。
+// Service 为行情服务。providers/client/db/rdb 均并发安全；fundamentals 的可变状态
+// （crumb 内存缓存）由 crumbMu 保护，整体可被多 goroutine 同时调用。
 type Service struct {
 	providers []Provider
 	db        *sqlx.DB
 	rdb       *redis.Client
 	client    *http.Client // 带代理的共享 client，供 provider 复用
 	gold      GoldResolver // NewService 注入 goldResolver；nil（如测试构造）时 GoldSymbol 走兜底
+
+	// fundamentals（Yahoo v7 PE）状态，见 fundamentals.go：
+	crumbMu    sync.Mutex   // 保护 crumb 读写，并串行化重取流程（并发 miss 只发一次网络）
+	crumb      string       // crumb 内存缓存；v7 401/403 时 invalidateCrumb 置空
+	fundClient *http.Client // 带 cookiejar 的独立 client，复用 client 的 Transport/代理
+
+	// crumb 流程三个 baseURL，默认真实地址；小写字段供同包测试注入
+	// （与 YahooProvider.baseURL 同款模式）。
+	fcBaseURL    string
+	crumbBaseURL string
+	v7BaseURL    string
 }
 
 // NewService 组装行情服务（Ruling-1 固定签名）：
@@ -100,11 +112,16 @@ func NewService(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *Service {
 
 // newServiceWithProviders 供测试注入 fake provider / 替换 provider 链。
 func newServiceWithProviders(cfg *config.Config, db *sqlx.DB, rdb *redis.Client, providers ...Provider) *Service {
+	client := newHTTPClient(cfg)
 	return &Service{
-		providers: providers,
-		db:        db,
-		rdb:       rdb,
-		client:    newHTTPClient(cfg),
+		providers:    providers,
+		db:           db,
+		rdb:          rdb,
+		client:       client,
+		fundClient:   newFundClient(client),
+		fcBaseURL:    fundCookieURL,
+		crumbBaseURL: crumbURL,
+		v7BaseURL:    v7QuoteURL,
 	}
 }
 

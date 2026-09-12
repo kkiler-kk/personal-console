@@ -28,6 +28,7 @@ func NewInvestHandler(db *sqlx.DB, qs *quote.Service) *InvestHandler {
 }
 
 // PositionRow 为单个资产的持仓行。指针字段在无行情/无昨收时为 nil。
+// PeTTM 在 manual/GOLD_CNY_G 资产、invalid 行与 PE 接口失败/字段缺失时为 nil。
 // Invalid=true 表示该资产的交易序列无法折叠（如超卖），数值字段已降级为零值。
 type PositionRow struct {
 	Asset          model.Asset `json:"asset"`
@@ -40,6 +41,7 @@ type PositionRow struct {
 	Price          *float64    `json:"price"`
 	PreviousClose  *float64    `json:"previous_close"`
 	DayChangePct   *float64    `json:"day_change_pct"`
+	PeTTM          *float64    `json:"pe_ttm"`
 	Stale          bool        `json:"stale"`
 	PriceUpdatedAt *time.Time  `json:"price_updated_at"`
 	Invalid        bool        `json:"invalid"`
@@ -65,7 +67,7 @@ type PositionsResp struct {
 //  1. 取全部资产；2. 取全部交易（IFNULL note，traded_at,id ASC）；
 //  3. 按 asset_id 分组折叠 + 批量报价（manual 资产不送行情，手输价即权威价，
 //     不参与 stale 判定，也避免 pkg/quote 的 writeBackPrice 覆盖用户输入）；
-//  4. 取 USDCNY 汇率；
+//  4. 取 USDCNY 汇率；批量取 PE(TTM)（manual 与 GOLD_CNY_G 不请求，PEs 永不返 error）；
 //  5. 组装每行（price/previous_close 报价缺席时回退 asset.CurrentPrice）；
 //  6. 折算 CNY 汇总（USD×fx、CNY×1；day_pnl 任一价缺失跳过该行，全缺→nil）。
 //
@@ -106,6 +108,16 @@ func (h *InvestHandler) ComputePositionsResponse(ctx context.Context) (*Position
 	quotes := h.quotes.Quotes(ctx, symbols)
 	fx := h.quotes.USDCNY(ctx)
 
+	// PE(TTM)：仅非 manual 且非积存金资产（GOLD_CNY_G 为虚拟 symbol，v7 不认识）。
+	// PEs 永不返 error：失败时全 nil + null 缓存，positions 照常 200（全局约束）。
+	peSymbols := make([]string, 0, len(assets))
+	for _, a := range assets {
+		if a.PriceSource != "manual" && a.Symbol != quote.GoldSymbol {
+			peSymbols = append(peSymbols, a.Symbol)
+		}
+	}
+	pes := h.quotes.PEs(ctx, peSymbols)
+
 	resp := &PositionsResp{Positions: []PositionRow{}}
 	var totalValue, totalCost, totalPnl, dayPnl float64
 	dayPnlHasData := false
@@ -142,6 +154,8 @@ func (h *InvestHandler) ComputePositionsResponse(ctx context.Context) (*Position
 			CostBasis:      pos.CostBasis,
 			RealizedPnl:    pos.RealizedPnl,
 			PriceUpdatedAt: a.PriceUpdatedAt,
+			// manual/GOLD_CNY_G 未送 PEs → map 缺席 → nil；invalid 行不走此路径恒 nil。
+			PeTTM: pes[a.Symbol],
 		}
 		if pricePtr != nil {
 			mv := pos.MarketValue
