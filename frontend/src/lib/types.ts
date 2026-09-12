@@ -23,7 +23,8 @@ export interface DashboardSummary {
 }
 export interface PostListResp { posts: Post[]; total: number; page: number; size: number }
 export interface ArchiveItem { year: number; month: number; count: number }
-export interface Habit { id: number; name: string; icon: string; color: string; archived: boolean; created_at: string }
+// checked_today：GET /api/habits 行级当日打卡状态（task 4.5，服务端真值）
+export interface Habit { id: number; name: string; icon: string; color: string; archived: boolean; created_at: string; checked_today: boolean }
 export interface HeatmapDay { date: string; count: number }
 
 export type AssetType = "stock" | "etf" | "metal" | "other"

@@ -32,7 +32,7 @@ export function Topbar() {
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="rounded-full">
+          <Button variant="ghost" size="icon" className="rounded-full" aria-label="用户菜单">
             {user?.avatar ? <img src={user.avatar} className="size-7 rounded-full object-cover" alt="" /> : <User className="size-4" />}
           </Button>
         </DropdownMenuTrigger>

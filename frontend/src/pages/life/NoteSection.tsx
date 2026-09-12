@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Trash2 } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
+import { ErrorState, errorText } from "@/components/ErrorState"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -66,7 +67,7 @@ export function NoteSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         {catsQ.isError ? (
-          <p className="text-sm text-destructive">加载分类失败：{catsQ.error instanceof Error ? catsQ.error.message : "未知错误"}</p>
+          <ErrorState title="加载分类失败" message={errorText(catsQ.error)} onRetry={() => catsQ.refetch()} />
         ) : catsQ.isPending ? (
           <Skeleton className="h-[76px] rounded-lg" />
         ) : notesCat ? (
@@ -88,7 +89,7 @@ export function NoteSection() {
         )}
 
         {notesQ.isError ? (
-          <p className="text-sm text-destructive">加载随手记失败：{notesQ.error instanceof Error ? notesQ.error.message : "未知错误"}</p>
+          <ErrorState title="加载随手记失败" message={errorText(notesQ.error)} onRetry={() => notesQ.refetch()} />
         ) : notesQ.isPending ? (
           <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
         ) : notes.length === 0 ? (

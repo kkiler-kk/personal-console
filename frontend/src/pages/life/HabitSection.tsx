@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react"
+import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { format } from "date-fns"
 import { Archive, Check, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import type { Habit } from "@/lib/types"
+import { ErrorState, errorText } from "@/components/ErrorState"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -19,29 +19,8 @@ import { HabitHeatmap } from "@/components/charts/HabitHeatmap"
 const COLORS = ["#6366f1", "#0ea5e9", "#14b8a6", "#22c55e", "#eab308", "#f97316", "#ef4444", "#ec4899"]
 const DEFAULT_COLOR = COLORS[0]
 
-// 逐习惯「今日已打卡」状态：契约 6 端点无 per-habit 当日状态（heatmap 仅全站聚合 count），
-// 以日期键 localStorage 记录打卡结果——刷新不丢；与服务端漂移时自愈：
-// check 幂等（重复打卡 200）、uncheck 404 时移除本地标记
-const CHECKS_PREFIX = "habit-checks:"
-
-function loadChecks(dateKey: string): number[] {
-  try {
-    const arr: unknown = JSON.parse(localStorage.getItem(CHECKS_PREFIX + dateKey) ?? "[]")
-    return Array.isArray(arr) ? arr.filter((n): n is number => typeof n === "number") : []
-  } catch {
-    return [] // 损坏的 JSON：视为无记录
-  }
-}
-function saveChecks(dateKey: string, ids: number[]) {
-  try { localStorage.setItem(CHECKS_PREFIX + dateKey, JSON.stringify(ids)) } catch { /* 存储满等异常：退化为内存态 */ }
-}
-function pruneOldChecks(dateKey: string) {
-  const keep = CHECKS_PREFIX + dateKey
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const k = localStorage.key(i)
-    if (k?.startsWith(CHECKS_PREFIX) && k !== keep) localStorage.removeItem(k)
-  }
-}
+// 当日打卡状态完全由服务端驱动（task 4.5）：GET /api/habits 行携带 checked_today，
+// mutation 成功后 invalidate ["habits"] 闭环刷新——不再有 localStorage hack。
 
 const CONFIRM_META = {
   uncheck: { title: (n: string) => `撤销「${n}」今日打卡？`, desc: "今日统计与热力图将同步更新", action: "撤销" },
@@ -118,23 +97,11 @@ function HabitDialog({ open, onOpenChange, habit, onSaved }: {
 export function HabitSection() {
   const qc = useQueryClient()
   const [year, setYear] = useState(() => new Date().getFullYear())
-  // 默认 List（不传 all）：归档习惯自然过滤（4.2 交接结论）
+  // 默认 List（不传 all）：归档习惯自然过滤（4.2 交接结论）；行含 checked_today（task 4.5）
   const habitsQ = useQuery({ queryKey: ["habits"], queryFn: () => api.getHabits() })
   const heatmapQ = useQuery({ queryKey: ["habit-heatmap", year], queryFn: () => api.getHabitHeatmap(year) })
   const dashQ = useQuery({ queryKey: ["dashboard"], queryFn: api.getDashboardSummary })
   const habits = habitsQ.data?.habits ?? []
-
-  const todayKey = useMemo(() => format(new Date(), "yyyy-MM-dd"), [])
-  const [checkedIds, setCheckedIds] = useState<number[]>(() => loadChecks(todayKey))
-  useEffect(() => { pruneOldChecks(todayKey) }, [todayKey])
-
-  const setChecked = (id: number, checked: boolean) => {
-    setCheckedIds((prev) => {
-      const next = checked ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((x) => x !== id)
-      saveChecks(todayKey, next)
-      return next
-    })
-  }
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["habits"] })
@@ -144,16 +111,16 @@ export function HabitSection() {
 
   const check = useMutation({
     mutationFn: (id: number) => api.checkHabit(id),
-    onSuccess: (_r, id) => { toast.success("已打卡"); setChecked(id, true); invalidateAll() },
+    onSuccess: () => { toast.success("已打卡"); invalidateAll() },
     onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "打卡失败"),
   })
   const uncheck = useMutation({
     mutationFn: (id: number) => api.uncheckHabit(id),
-    onSuccess: (_r, id) => { toast.success("已撤销打卡"); setChecked(id, false); invalidateAll() },
-    onError: (e: unknown, id) => {
+    onSuccess: () => { toast.success("已撤销打卡"); invalidateAll() },
+    onError: (e: unknown) => {
       if (e instanceof ApiError && e.status === 404) {
-        // 服务端本就无该记录（本地标记漂移）→ 对齐服务端，视为撤销成功
-        setChecked(id, false); invalidateAll(); toast.success("已撤销打卡")
+        // 服务端本就无该记录（状态漂移）→ invalidate ["habits"] 拉齐服务端真值，视为撤销成功
+        invalidateAll(); toast.success("已撤销打卡")
       } else {
         toast.error(e instanceof ApiError ? e.message : "撤销失败")
       }
@@ -185,9 +152,9 @@ export function HabitSection() {
     else del.mutate(habit.id)
   }
 
-  // 全站今日 x/y：以 dashboard summary 为服务端真值；查询未就绪时回退本地态
+  // 全站今日 x/y：以 dashboard summary 为服务端真值；查询未就绪时回退 habits 行的 checked_today
   const dash = dashQ.data
-  const checkedToday = dash?.habits_checked_today ?? checkedIds.length
+  const checkedToday = dash?.habits_checked_today ?? habits.filter((h) => h.checked_today).length
   const totalToday = dash?.habits_total ?? habits.length
 
   return (
@@ -203,7 +170,7 @@ export function HabitSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         {habitsQ.isError ? (
-          <p className="text-sm text-destructive">加载习惯失败：{habitsQ.error instanceof Error ? habitsQ.error.message : "未知错误"}</p>
+          <ErrorState title="加载习惯失败" message={errorText(habitsQ.error)} onRetry={() => habitsQ.refetch()} />
         ) : habitsQ.isPending ? (
           <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[52px] rounded-lg" />)}</div>
         ) : habits.length === 0 ? (
@@ -211,7 +178,7 @@ export function HabitSection() {
         ) : (
           <div className="space-y-2">
             {habits.map((h) => {
-              const checked = checkedIds.includes(h.id)
+              const checked = h.checked_today
               return (
                 <div key={h.id} className="flex items-center gap-2.5 rounded-lg border border-border p-2.5">
                   <span className="text-xl leading-none">{h.icon || "⭐"}</span>
@@ -250,9 +217,9 @@ export function HabitSection() {
           </div>
         )}
 
-        {/* 年度热力图（三分支：骨架 / 错误提示不卡死 / 正常渲染） */}
+        {/* 年度热力图（三分支：骨架 / 统一错误态不卡死 / 正常渲染） */}
         {heatmapQ.isError ? (
-          <p className="text-sm text-destructive">加载热力图失败：{heatmapQ.error instanceof Error ? heatmapQ.error.message : "未知错误"}</p>
+          <ErrorState title="加载热力图失败" message={errorText(heatmapQ.error)} onRetry={() => heatmapQ.refetch()} />
         ) : heatmapQ.isPending ? (
           <Skeleton className="h-32 rounded-lg" />
         ) : (

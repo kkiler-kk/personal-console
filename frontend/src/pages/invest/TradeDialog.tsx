@@ -58,9 +58,10 @@ export function TradeDialog({ assets, onSaved, initialAssetId, trigger }: {
   })
 
   const qty = Number(quantity)
+  // price > 0 对齐后端 binding gt=0（task 4.5）：前端先拦，避免裸 binding 英文错误 toast
   const canSubmit =
     assetId !== "" && quantity.trim() !== "" && Number.isFinite(qty) && qty > 0 &&
-    price.trim() !== "" && Number.isFinite(Number(price)) && Number(price) >= 0 &&
+    price.trim() !== "" && Number.isFinite(Number(price)) && Number(price) > 0 &&
     tradedAt !== "" && !create.isPending
 
   return (

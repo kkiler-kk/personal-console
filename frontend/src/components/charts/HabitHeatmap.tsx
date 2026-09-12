@@ -2,6 +2,7 @@ import { useMemo } from "react"
 import { format } from "date-fns"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { HeatmapDay } from "@/lib/types"
+import { compactWindowStart } from "@/lib/dates"
 import { Button } from "@/components/ui/button"
 
 interface HabitHeatmapProps {
@@ -39,12 +40,11 @@ function buildYearWeeks(year: number): (string | null)[][] {
   return weeks
 }
 
-/** compact：近 16 周（末列 = 今天所在周，今天之后的日期留空） */
+/** compact：近 16 周（末列 = 今天所在周，今天之后的日期留空）；窗口起点走 lib/dates 共享公式 */
 function buildCompactWeeks(): (string | null)[][] {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
-  const start = new Date(now)
-  start.setDate(now.getDate() - (now.getDay() + 6) % 7 - 15 * 7)
+  const start = compactWindowStart(now)
   const cells = Array.from({ length: 16 * 7 }, (_, i) => {
     const d = new Date(start)
     d.setDate(start.getDate() + i)

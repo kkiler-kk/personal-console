@@ -109,6 +109,11 @@ func (h *DashboardHandler) Summary(c *gin.Context) {
 	}
 
 	resp, _ := json.Marshal(s)
-	h.redis.Set(context.Background(), cacheKey, resp, 60*time.Second)
+	// 守卫（task 4.5）：请求已被客户端中断时，上游查询多半因 ctx 取消而降级为零值，
+	// 缓存这份零值会让后续请求 60s 内读到错误摘要——仅在 ctx 未取消时写缓存。
+	// 响应照常返回（连接已断则写入静默失败）。
+	if c.Request.Context().Err() == nil {
+		h.redis.Set(context.Background(), cacheKey, resp, 60*time.Second)
+	}
 	c.Data(http.StatusOK, "application/json", resp)
 }

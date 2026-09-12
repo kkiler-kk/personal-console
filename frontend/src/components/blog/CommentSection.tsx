@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
+import { ErrorState, errorText } from "@/components/ErrorState"
 import type { Comment } from "@/lib/types"
 
 const getEmail = () => localStorage.getItem("comment_email") || ""
@@ -64,7 +65,7 @@ export function CommentSection({ slug }: { slug: string }) {
   const [content, setContent] = useState("")
   const [parentId, setParentId] = useState<number | undefined>()
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ["comments", slug, email],
     queryFn: () => api.getComments(slug, email || undefined),
   })
@@ -97,7 +98,9 @@ export function CommentSection({ slug }: { slug: string }) {
         </Button>
       </div>
       <div className="divide-y divide-border">
-        {isPending ? <p className="text-sm text-muted-foreground py-4">加载中…</p>
+        {/* isError → 统一错误态（task 4.5）：替代误导性「还没有评论」空态 */}
+        {isError ? <ErrorState title="加载评论失败" message={errorText(error)} onRetry={refetch} />
+          : isPending ? <p className="text-sm text-muted-foreground py-4">加载中…</p>
           : comments.length === 0 ? <p className="text-sm text-muted-foreground py-4">还没有评论，来抢沙发</p>
           : comments.map((c) => <CommentItem key={c.id} c={c} slug={slug} onReply={setParentId} />)}
       </div>

@@ -71,15 +71,21 @@ func (h *HabitHandler) habitExists(ctx context.Context, id int64) (bool, error) 
 }
 
 // List 返回习惯列表；?all=1 含归档，否则仅未归档。
+// 每行附 checked_today（今日是否已打卡，task 4.5）：子查询 + Go 本地今天传参（禁 CURDATE()）；
+// 该列为查询产物，model.Habit.CheckedToday 仅在此填充。
 func (h *HabitHandler) List(c *gin.Context) {
-	query := "SELECT " + habitColumns + " FROM habits"
+	today := time.Now().Format("2006-01-02")
+	query := "SELECT " + habitColumns +
+		", (SELECT COUNT(*) FROM habit_logs hl WHERE hl.habit_id = h.id AND hl.log_date = ?) > 0 AS checked_today" +
+		" FROM habits h"
+	args := []any{today}
 	if c.Query("all") != "1" {
-		query += " WHERE archived = FALSE"
+		query += " WHERE h.archived = FALSE"
 	}
-	query += " ORDER BY created_at"
+	query += " ORDER BY h.created_at"
 
 	habits := []model.Habit{}
-	if err := h.db.SelectContext(c.Request.Context(), &habits, query); err != nil {
+	if err := h.db.SelectContext(c.Request.Context(), &habits, query, args...); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -311,13 +317,16 @@ func (h *HabitHandler) Heatmap(c *gin.Context) {
 
 // TodayCounts 返回（今日已打卡习惯数, 未归档习惯总数），供 dashboard Summary 复用。
 // 今天口径：Go 本地日期字符串传参（惯例：禁 CURDATE()/INTERVAL）。
+// checked 与 total 口径一致：JOIN habits 过滤归档（task 4.5）——归档习惯的历史打卡不计入。
 func (h *HabitHandler) TodayCounts(ctx context.Context) (checked int, total int, err error) {
 	if err = h.db.GetContext(ctx, &total,
 		"SELECT COUNT(*) FROM habits WHERE archived = FALSE"); err != nil {
 		return 0, 0, err
 	}
 	if err = h.db.GetContext(ctx, &checked,
-		"SELECT COUNT(DISTINCT habit_id) FROM habit_logs WHERE log_date = ?",
+		"SELECT COUNT(DISTINCT hl.habit_id) FROM habit_logs hl "+
+			"JOIN habits h ON h.id = hl.habit_id "+
+			"WHERE hl.log_date = ? AND h.archived = FALSE",
 		time.Now().Format("2006-01-02")); err != nil {
 		return 0, 0, err
 	}

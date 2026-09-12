@@ -104,13 +104,15 @@ type CalendarDay struct {
 
 // profileColumns 是 language_profiles 查询的显式列清单（禁 SELECT *）。
 // goal/note 可空 → IFNULL 兜底；updated_at TIMESTAMP 技术可空（3.1 审查提示）→ 同样兜底。
-const profileColumns = "id, lang, level, IFNULL(goal,'') AS goal, IFNULL(note,'') AS note, IFNULL(updated_at, CURRENT_TIMESTAMP) AS updated_at"
+// 兜底值用 ? 传 Go 本地 time.Now()（task 4.5 时区收敛）：CURRENT_TIMESTAMP 走 MySQL
+// 服务器时区，与应用层 Go 本地口径可能漂移（同「禁 CURDATE()」惯例）。
+const profileColumns = "id, lang, level, IFNULL(goal,'') AS goal, IFNULL(note,'') AS note, IFNULL(updated_at, ?) AS updated_at"
 
 // Profiles 返回已有档案行（契约：仅已有行，缺失语言由前端渲染空卡）。
 func (h *LearnHandler) Profiles(c *gin.Context) {
 	profiles := []model.LanguageProfile{}
 	err := h.db.SelectContext(c.Request.Context(), &profiles,
-		"SELECT "+profileColumns+" FROM language_profiles ORDER BY lang")
+		"SELECT "+profileColumns+" FROM language_profiles ORDER BY lang", time.Now())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -147,14 +149,16 @@ func (h *LearnHandler) UpdateProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "profile updated"})
 }
 
-// CreateSession 记录一次学习；date 缺省 = 今天（Go 本地），成功后失效 dashboard 缓存。
+// CreateSession 记录一次学习；date 缺省 = 今天（Go 本地），禁未来日期（task 4.5），
+// 成功后失效 dashboard 缓存。
 func (h *LearnHandler) CreateSession(c *gin.Context) {
 	var req struct {
 		Lang     string `json:"lang" binding:"required"`
 		Activity string `json:"activity" binding:"required"`
-		Minutes  int    `json:"minutes" binding:"gte=0"`
-		Date     string `json:"date"`
-		Note     string `json:"note" binding:"max=200"`
+		// minutes 上限 14400（=24h，task 4.5）：防手滑超大值污染统计
+		Minutes int    `json:"minutes" binding:"gte=0,lte=14400"`
+		Date    string `json:"date"`
+		Note    string `json:"note" binding:"max=200"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -170,11 +174,16 @@ func (h *LearnHandler) CreateSession(c *gin.Context) {
 	}
 
 	// 日期口径：Go 本地 time.Now()，禁 MySQL CURDATE()（阶段 2 I-3 教训）
+	today := time.Now().Format("2006-01-02")
 	date := req.Date
 	if date == "" {
-		date = time.Now().Format("2006-01-02")
+		date = today
 	} else if _, err := time.Parse("2006-01-02", date); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "date 格式应为 YYYY-MM-DD"})
+		return
+	}
+	if date > today { // YYYY-MM-DD 字典序即时间序
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date 不能晚于今天"})
 		return
 	}
 

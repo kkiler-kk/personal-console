@@ -31,7 +31,7 @@ A personal blog system with a React frontend and Go backend. Uses MySQL for pers
 Entry point: `cmd/main.go` → loads config, init DB + Redis, auto-migrates tables, starts router.
 
 - `config/` — Config loading (environment variables; `backend/.env` is NOT auto-loaded — export vars or rely on defaults), MySQL (`sqlx`), Redis connections; `QuoteProxy` for quote upstream
-- `handler/` — HTTP handlers: `user.go` (login/profile), `post.go` (CRUD + archive), `category.go` (CRUD), `comment.go`, `dashboard.go` (summary incl. portfolio + learn fields `study_minutes_today`/`learn_streak`/`review_due`), `upload.go`/`gallery.go`, `asset.go` (asset CRUD + manual price), `trade.go` (trade CRUD + oversell guard), `invest.go` (positions/quotes/price-history/value-curve), `learn.go` (language profiles upsert, study session create/delete, stats, yearly calendar)
+- `handler/` — HTTP handlers: `user.go` (login/profile), `post.go` (CRUD + archive), `category.go` (CRUD), `comment.go`, `dashboard.go` (summary incl. portfolio + learn fields `study_minutes_today`/`learn_streak`/`review_due`), `upload.go`/`gallery.go`, `asset.go` (asset CRUD + manual price), `trade.go` (trade CRUD + oversell guard), `invest.go` (positions/quotes/price-history/value-curve), `learn.go` (language profiles list/upsert, study session create/delete, stats, yearly calendar)
 - `middleware/auth.go` — JWT auth middleware
 - `model/model.go` — Data models (User, Post, Category, Tag, PostTag, Asset, Trade, PriceHistory, LanguageProfile, StudySession)
 - `pkg/jwt.go` — JWT token generation/validation utilities

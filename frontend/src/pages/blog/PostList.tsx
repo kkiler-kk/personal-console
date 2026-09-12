@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
 import { PostCard } from "@/components/blog/PostCard"
 import { Pagination } from "@/components/blog/Pagination"
+import { ErrorState, errorText } from "@/components/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 
@@ -13,7 +14,7 @@ export function PostListPage({ category, tag, title, year, month, showArchive }:
   category?: string; tag?: string; title?: string; year?: number; month?: number; showArchive?: boolean
 }) {
   const [page, setPage] = useState(1)
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ["posts", page, category, tag, year, month],
     queryFn: () => api.getPosts({ page, size: PAGE_SIZE, category, tag, year, month }),
   })
@@ -25,8 +26,10 @@ export function PostListPage({ category, tag, title, year, month, showArchive }:
           <Button variant="outline" size="sm" asChild><Link to="/blog/archive">归档</Link></Button>
         )}
       </div>
-      {/* 后端空列表返回 null（Go nil slice），需兜底为空数组 */}
-      {isPending || !data
+      {/* isError → 统一错误态（task 4.5）：替代永久骨架屏；空列表返回 null（Go nil slice）仍兜底为空数组 */}
+      {isError ? (
+        <ErrorState title="加载文章列表失败" message={errorText(error)} onRetry={refetch} />
+      ) : isPending || !data
         ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
         : (data.posts ?? []).map((p) => <PostCard key={p.id} post={p} />)}
       {data && <Pagination page={data.page} size={data.size} total={data.total} onChange={setPage} />}

@@ -37,6 +37,11 @@ const (
 	fundCacheTTL    = 3600 * time.Second
 
 	crumbMaxBody = 512 // crumb 为短字符串；截断超长响应（HTML 错误页等）
+
+	// peFetchBudget 为单次 fetchPEs 全流程的 ctx 预算（task 4.5）：
+	// 最坏路径 4 次 HTTP（fc 种 cookie + getcrumb + v7，401/403 再重试一轮），
+	// fundClient.Timeout 只约束单次调用；挂死代理下 positions 延迟需要总上界。
+	peFetchBudget = 12 * time.Second
 )
 
 // Fundamentals 为 Redis "fund:<symbol>" 缓存条目的序列化结构。
@@ -44,14 +49,48 @@ type Fundamentals struct {
 	PEttm *float64 `json:"pe_ttm"` // null = 无数据（ETF 部分有、期货/指数无）
 }
 
-// v7Envelope 只声明用到的字段；trailingPE 用 *float64（字段缺失/null 安全）。
+// v7Envelope 只声明用到的字段；trailingPE 用 *float64（字段缺失/null 安全）；
+// error 为 RawMessage：真实 v7 返回 [{code,description}] 数组，历史 fixture 亦见裸字符串，
+// 由 v7ErrorText 兼容解析（task 4.5 可选项）。
 type v7Envelope struct {
 	QuoteResponse struct {
 		Result []struct {
 			Symbol     string   `json:"symbol"`
 			TrailingPE *float64 `json:"trailingPE"`
 		} `json:"result"`
+		Error json.RawMessage `json:"error"`
 	} `json:"quoteResponse"`
+}
+
+// v7ErrorText 解析 v7 的 error 字段为人类可读文案（仅用于失败 log/error 消息）；
+// 空/null/两种形态都解析失败 → ""。
+func v7ErrorText(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var arr []struct {
+		Code        string `json:"code"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(raw, &arr); err == nil && len(arr) > 0 {
+		parts := make([]string, 0, len(arr))
+		for _, e := range arr {
+			switch {
+			case e.Description != "":
+				parts = append(parts, e.Code+": "+e.Description)
+			case e.Code != "":
+				parts = append(parts, e.Code)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, "; ")
+		}
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	return ""
 }
 
 // newFundClient 构造 fundamentals 独立 client：带 cookiejar（crumb 流程需要
@@ -90,7 +129,9 @@ func (s *Service) getCrumb(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("quote: seed yahoo cookie: %w", err)
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, crumbMaxBody)) // 排空以利连接复用
+	// 有界读取（最多 crumbMaxBody）后 Close：fc 响应体通常极小，读多少算多少；
+	// 并非完整排空——超界部分随 Close 丢弃，此时连接不复用（措辞修正，task 4.5）
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, crumbMaxBody))
 	_ = resp.Body.Close()
 
 	// 第二步：getcrumb（带 UA；cookie 由 jar 自动携带）。
@@ -120,9 +161,13 @@ func (s *Service) getCrumb(ctx context.Context) (string, error) {
 }
 
 // invalidateCrumb 失效内存 crumb（v7 返回 401/403 时调用）。
-func (s *Service) invalidateCrumb() {
+// compare-and-invalidate（task 4.5）：仅当缓存值仍是触发失败的 stale crumb 才清空，
+// 避免并发场景误删其他 goroutine 刚重取成功的新 crumb。
+func (s *Service) invalidateCrumb(stale string) {
 	s.crumbMu.Lock()
-	s.crumb = ""
+	if s.crumb == stale {
+		s.crumb = ""
+	}
 	s.crumbMu.Unlock()
 }
 
@@ -147,6 +192,12 @@ func (s *Service) requestV7(ctx context.Context, symbols []string, crumb string)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		// 尽力解析 body 里的 quoteResponse.error 丰富失败原因（HTML/非 JSON → 忽略，task 4.5）
+		var env v7Envelope
+		_ = json.NewDecoder(io.LimitReader(resp.Body, crumbMaxBody)).Decode(&env)
+		if txt := v7ErrorText(env.QuoteResponse.Error); txt != "" {
+			return nil, resp.StatusCode, fmt.Errorf("quote: v7 http %d: %s", resp.StatusCode, txt)
+		}
 		return nil, resp.StatusCode, fmt.Errorf("quote: v7 http %d", resp.StatusCode)
 	}
 	var env v7Envelope
@@ -162,7 +213,11 @@ func (s *Service) requestV7(ctx context.Context, symbols []string, crumb string)
 
 // fetchPEs 走 crumb + v7 一次批量请求；401/403 → 失效重取 crumb 并重试一次（仅一次）。
 // 重试后仍失败（含其它状态码/网络错误）→ error，由 PEs 降级。
+// 全流程受 peFetchBudget 的 ctx 预算约束（task 4.5），防挂死代理拖长 positions。
 func (s *Service) fetchPEs(ctx context.Context, symbols []string) (map[string]*float64, error) {
+	ctx, cancel := context.WithTimeout(ctx, peFetchBudget)
+	defer cancel()
+
 	crumb, err := s.getCrumb(ctx)
 	if err != nil {
 		return nil, err
@@ -175,7 +230,7 @@ func (s *Service) fetchPEs(ctx context.Context, symbols []string) (map[string]*f
 		return nil, err
 	}
 	log.Printf("quote: v7 returned %d, refreshing crumb and retrying once", status)
-	s.invalidateCrumb()
+	s.invalidateCrumb(crumb)
 	crumb, err = s.getCrumb(ctx)
 	if err != nil {
 		return nil, err

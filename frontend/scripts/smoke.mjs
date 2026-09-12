@@ -69,14 +69,16 @@ if (await firstPostLink.count() === 0) {
 const token = await page.evaluate(() => localStorage.getItem("token"))
 if (!token) throw new Error("STEP8: localStorage 无 token")
 const auth = { Authorization: `Bearer ${token}` }
-const created = await page.request.post(BASE + "/api/assets", {
-  headers: auth,
-  data: { symbol: "SMOKETEST", name: "冒烟测试资产", type: "other", price_source: "manual", currency: "USD" },
-})
-if (!created.ok()) throw new Error("create asset failed: " + created.status())
-const { id: assetId } = await created.json()
+// 创建也放进 try（task 4.5）：资产一旦建成，后续任何失败 finally 都能保证清理
+let assetId = null
 let tradeId = null
 try {
+  const created = await page.request.post(BASE + "/api/assets", {
+    headers: auth,
+    data: { symbol: "SMOKETEST", name: "冒烟测试资产", type: "other", price_source: "manual", currency: "USD" },
+  })
+  if (!created.ok()) throw new Error("create asset failed: " + created.status())
+  assetId = (await created.json()).id
   const pr = await page.request.put(BASE + `/api/assets/${assetId}/price`, { headers: auth, data: { price: 100 } })
   if (!pr.ok()) throw new Error("update price failed: " + pr.status())
   const tr = await page.request.post(BASE + "/api/trades", {
@@ -91,13 +93,20 @@ try {
   if (!row || Math.abs(row.quantity - 2) > 1e-9 || Math.abs(row.avg_cost - 90) > 1e-9) {
     throw new Error("position mismatch: " + JSON.stringify(row))
   }
+  // 形状断言（task 4.5）：pe_ttm 键必须存在（manual 资产值为 null 属预期，键缺席才是回归）
+  if (!("pe_ttm" in row)) throw new Error("position row missing pe_ttm key: " + JSON.stringify(row))
   await page.goto(BASE + "/invest", { waitUntil: "networkidle" })
   await page.waitForSelector("text=SMOKETEST", { timeout: 10_000 })
 } finally {
   // 清理：删交易 → 删资产（断言失败也不留测试数据）
-  if (tradeId != null) await page.request.delete(BASE + `/api/trades/${tradeId}`, { headers: auth })
-  const del = await page.request.delete(BASE + `/api/assets/${assetId}`, { headers: auth })
-  if (!del.ok()) console.error(`WARN: cleanup asset ${assetId} failed: ${del.status()}`)
+  if (tradeId != null) {
+    const dt = await page.request.delete(BASE + `/api/trades/${tradeId}`, { headers: auth })
+    if (!dt.ok()) console.error(`WARN: cleanup trade ${tradeId} failed: ${dt.status()}`)
+  }
+  if (assetId != null) {
+    const del = await page.request.delete(BASE + `/api/assets/${assetId}`, { headers: auth })
+    if (!del.ok()) console.error(`WARN: cleanup asset ${assetId} failed: ${del.status()}`)
+  }
 }
 console.log("STEP8 INVEST PASS")
 

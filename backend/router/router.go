@@ -12,7 +12,9 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
+// Setup 组装路由。qs 为 quote.Service 全局单实例（task 4.5，main.go 构造传入，
+// 与快照调度器共享），由 asset/invest handler 复用。
+func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client, qs *quote.Service) *gin.Engine {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
@@ -32,8 +34,7 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *gin.Engine {
 	cmth := handler.NewCommentHandler(cfg, db)
 	auth := middleware.AuthMiddleware(cfg.JWTSecret)
 
-	// invest: quote.Service 构造一次，由 asset/invest handler 共享
-	qs := quote.NewService(cfg, db, rdb)
+	// invest: quote.Service 单实例由 main.go 传入，asset/invest handler 共享
 	ah := handler.NewAssetHandler(db, qs, rdb)
 	trh := handler.NewTradeHandler(db, rdb)
 	ih := handler.NewInvestHandler(db, qs)

@@ -141,6 +141,9 @@ type Habit struct {
 	Color     string    `json:"color" db:"color"`
 	Archived  bool      `json:"archived" db:"archived"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
+
+	// CheckedToday 为查询产物（List 的子查询列，task 4.5）：INSERT/UPDATE 不涉及。
+	CheckedToday bool `json:"checked_today" db:"checked_today"`
 }
 
 type HabitLog struct {

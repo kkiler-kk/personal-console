@@ -21,8 +21,12 @@ export default function Login() {
     setLoading(true)
     try {
       await login(username, password)
-      const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || "/"
-      navigate(from, { replace: true })
+      // 回跳保留 search+hash（task 4.5）：ProtectedRoute 存入的是完整 location
+      const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from
+      const target = from
+        ? (from.pathname ?? "/") + (from.search ?? "") + (from.hash ?? "")
+        : "/"
+      navigate(target, { replace: true })
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "登录失败")
     } finally {

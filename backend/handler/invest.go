@@ -259,8 +259,9 @@ type closeScanRow struct {
 
 // PositionsHistory 返回组合价值曲线（CNY 口径）：?days=（默认 90，clamp 1..365）。
 // dates 为最近 days 个自然日（今天在内，升序，time.Local 日期部分）；
-// 每日单价取 price_history（窗口内）当日/最近更早 close，无则回退 asset.current_price，
-// USD 资产按 USDCNY 汇率折算。响应 {points:[{date,value,cost,pnl}], currency:"CNY"}。
+// 每日单价取 price_history（窗口内 + 窗口前每 symbol 最近一行 carry-in，task 4.5）
+// 当日/最近更早 close，无则回退 asset.current_price，USD 资产按 USDCNY 汇率折算。
+// 响应 {points:[{date,value,cost,pnl}], currency:"CNY"}。
 func (h *InvestHandler) PositionsHistory(c *gin.Context) {
 	days := 90
 	if d := c.Query("days"); d != "" {
@@ -318,12 +319,26 @@ func (h *InvestHandler) PositionsHistory(c *gin.Context) {
 	}
 
 	closeRows := []closeScanRow{}
+	windowStart := dates[0].Format("2006-01-02")
 	if err := h.db.SelectContext(ctx, &closeRows,
 		"SELECT ph.symbol, ph.date, ph.close FROM price_history ph WHERE ph.date >= ? ORDER BY ph.date",
-		dates[0].Format("2006-01-02")); err != nil {
+		windowStart); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// carry-in（task 4.5）：每 symbol 补取窗口前最近一行 close，使窗口首日即用真实历史价，
+	// 不再回退 asset.current_price 造成曲线开头偏平。子查询先取 MAX(date)（ONLY_FULL_GROUP_BY
+	// 安全），再 join 回原表取对应 close；(symbol,date) 唯一键保证每 symbol 恰一行。
+	carryRows := []closeScanRow{}
+	if err := h.db.SelectContext(ctx, &carryRows,
+		"SELECT ph.symbol, ph.date, ph.close FROM price_history ph "+
+			"JOIN (SELECT symbol, MAX(date) AS max_date FROM price_history WHERE date < ? GROUP BY symbol) lc "+
+			"ON lc.symbol = ph.symbol AND lc.max_date = ph.date",
+		windowStart); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	closeRows = append(closeRows, carryRows...)
 	closes := make([]portfolio.CloseRow, 0, len(closeRows))
 	for _, cr := range closeRows {
 		id, ok := symToID[cr.Symbol]

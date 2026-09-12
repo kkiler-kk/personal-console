@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { ChevronLeft, ChevronRight, ImagePlus, Trash2 } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import type { GalleryItem } from "@/lib/types"
+import { ErrorState, errorText } from "@/components/ErrorState"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
@@ -56,7 +57,7 @@ export function GallerySection() {
   const { isAdmin } = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const { data, isPending, isError, error } = useQuery({ queryKey: ["gallery"], queryFn: api.getGallery })
+  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ["gallery"], queryFn: api.getGallery })
   // 后端 Go nil slice 会序列化为 null（uploads 目录无图片时 items 为 null），此处兜底为空数组
   const items = data?.items ?? []
 
@@ -94,7 +95,7 @@ export function GallerySection() {
       </CardHeader>
       <CardContent>
         {isError ? (
-          <p className="text-sm text-destructive">加载照片失败：{error instanceof Error ? error.message : "未知错误"}</p>
+          <ErrorState title="加载照片失败" message={errorText(error)} onRetry={refetch} />
         ) : isPending ? (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="aspect-square rounded-xl" />)}</div>
         ) : items.length === 0 ? (

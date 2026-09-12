@@ -112,7 +112,7 @@ export default function PostEditor() {
             </div>
             <div className="flex flex-wrap gap-1.5">
               {tags.map((t) => (
-                <Badge key={t} variant="secondary">{t}<button onClick={() => setTags(tags.filter((x) => x !== t))}><X className="size-3 ml-1" /></button></Badge>
+                <Badge key={t} variant="secondary">{t}<button type="button" aria-label={`移除标签 ${t}`} onClick={() => setTags(tags.filter((x) => x !== t))}><X className="size-3 ml-1" /></button></Badge>
               ))}
             </div>
           </div>

@@ -22,14 +22,17 @@ func main() {
 	// auto migrate
 	autoMigrate(db)
 
-	// 每日价格快照调度器 + 启动补跑（quote.Service 无共享可变状态，
-	// 与 router.Setup 内部实例并存安全：Redis/DB 共享，仅多一个 HTTP client）。
+	// quote.Service 全局单实例（task 4.5）：快照调度器与 router 内 handler 共享，
+	// 消除双实例双 HTTP client/连接池。
+	qs := quote.NewService(cfg, db, rdb)
+
+	// 每日价格快照调度器 + 启动补跑
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cronHandle := service.StartSnapshotScheduler(ctx, db, quote.NewService(cfg, db, rdb))
+	cronHandle := service.StartSnapshotScheduler(ctx, db, qs)
 	defer cronHandle.Stop()
 
-	r := router.Setup(cfg, db, rdb)
+	r := router.Setup(cfg, db, rdb, qs)
 
 	log.Printf("server starting on :%s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {

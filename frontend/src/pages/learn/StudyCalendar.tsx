@@ -9,16 +9,20 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"]
 
-// minutes 分档着色：0 无 / 1-29 / 30-59 / 60+
-const tierCls = (minutes: number) =>
+// minutes 分档着色：无记录 / 已打卡（minutes=0 但有记录，task 4.5）/ 1-29 / 30-59 / 60+
+const tierCls = (minutes: number, hasRecord = true) =>
   minutes >= 60 ? "bg-primary text-primary-foreground"
   : minutes >= 30 ? "bg-primary/50"
   : minutes >= 1 ? "bg-primary/25"
+  : hasRecord ? "bg-primary/10 text-primary"
   : "bg-muted/50"
 
-const LEGEND: { label: string; minutes: number }[] = [
-  { label: "无", minutes: 0 }, { label: "1-29", minutes: 15 },
-  { label: "30-59", minutes: 45 }, { label: "60+", minutes: 90 },
+const LEGEND: { label: string; cls: string; border?: boolean }[] = [
+  { label: "无", cls: tierCls(0, false), border: true },
+  { label: "已打卡", cls: tierCls(0), border: true },
+  { label: "1-29", cls: tierCls(15), border: true },
+  { label: "30-59", cls: tierCls(45), border: true },
+  { label: "60+", cls: tierCls(90) },
 ]
 
 const dateKey = (y: number, m: number, d: number) =>
@@ -46,11 +50,11 @@ function MonthCard({ year, month, dayMap, todayKey }: {
           const key = dateKey(year, month, d)
           const rec = dayMap.get(key)
           const title = rec
-            ? `${month + 1}月${d}日 · ${rec.minutes} 分钟${rec.langs.length > 0 ? ` · ${rec.langs.join(",")}` : ""}`
+            ? `${month + 1}月${d}日 · ${rec.minutes > 0 ? `${rec.minutes} 分钟` : "已打卡"}${rec.langs.length > 0 ? ` · ${rec.langs.join(",")}` : ""}`
             : `${month + 1}月${d}日 · 无记录`
           return (
             <div key={key} title={title}
-              className={`aspect-square rounded-[4px] flex items-center justify-center text-[9px] tnum ${tierCls(rec?.minutes ?? 0)} ${key === todayKey ? "ring-1 ring-primary" : ""}`}>
+              className={`aspect-square rounded-[4px] flex items-center justify-center text-[9px] tnum ${tierCls(rec?.minutes ?? 0, rec != null)} ${key === todayKey ? "ring-1 ring-primary" : ""}`}>
               {d}
             </div>
           )
@@ -99,7 +103,7 @@ export function StudyCalendar() {
           <div className="flex items-center justify-end gap-3 text-[11px] text-muted-foreground">
             {LEGEND.map((l) => (
               <span key={l.label} className="flex items-center gap-1 tnum">
-                <span className={`size-2.5 rounded-[3px] ${tierCls(l.minutes)} ${l.minutes >= 60 ? "" : "border border-border/50"}`} />
+                <span className={`size-2.5 rounded-[3px] ${l.cls} ${l.border ? "border border-border/50" : ""}`} />
                 {l.label}
               </span>
             ))}

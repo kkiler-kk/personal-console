@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
 import { TrendingUp, Languages, Sprout, PenLine, MessageSquare, Image } from "lucide-react"
 import { api } from "@/lib/api"
+import { compactWindowStart } from "@/lib/dates"
 import { StatCard } from "@/components/StatCard"
 import { ValueChart } from "@/components/charts/ValueChart"
 import { HabitHeatmap } from "@/components/charts/HabitHeatmap"
@@ -13,15 +14,6 @@ import { useAuth } from "@/context/AuthContext"
 // 涨绿跌红（仓库约定）：up #16a34a / down #dc2626
 const pnlCls = (v: number) => v >= 0 ? "text-[#16a34a]" : "text-[#dc2626]"
 const signedInt = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(Math.round(v)).toLocaleString("zh-CN")}`
-
-// 与 HabitHeatmap buildCompactWeeks 同口径的窗口起点：本周一（周一起始）− 15 周
-function compactWindowStart(): Date {
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  const start = new Date(now)
-  start.setDate(now.getDate() - (now.getDay() + 6) % 7 - 15 * 7)
-  return start
-}
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -70,7 +62,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 max-w-6xl">
       <div>
-        <h1 className="text-xl font-semibold">你好，{user?.nickname || user?.username} 👋</h1>
+        <h1 className="text-xl font-semibold">你好，{user?.nickname || user?.username} <span aria-hidden="true">👋</span></h1>
         <p className="text-sm text-muted-foreground">这是你的个人控制台总览</p>
       </div>
 
@@ -99,7 +91,8 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)] sm:col-span-2">
+            {/* 热力卡 isError 不渲染时收益曲线补满整行（task 4.5 可选项），避免右侧留白 */}
+            <Card className={`shadow-[0_1px_3px_rgba(0,0,0,.06)] ${heatmapError ? "sm:col-span-3" : "sm:col-span-2"}`}>
               <CardHeader><CardTitle className="text-base">收益曲线（近 30 天 · CNY）</CardTitle></CardHeader>
               <CardContent>
                 {curve.length === 0 ? (

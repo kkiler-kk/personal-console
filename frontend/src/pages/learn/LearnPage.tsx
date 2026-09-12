@@ -51,6 +51,10 @@ export default function LearnPage() {
       {statsQ.isError && (
         <p className="text-sm text-destructive">加载学习统计失败：{statsQ.error instanceof Error ? statsQ.error.message : "未知错误"}</p>
       )}
+      {/* profilesQ 失败也要出声（task 4.5）：语言卡会静默渲染成「未设置」，易误判为无档案 */}
+      {profilesQ.isError && (
+        <p className="text-sm text-destructive">加载语言档案失败：{profilesQ.error instanceof Error ? profilesQ.error.message : "未知错误"}</p>
+      )}
 
       {/* streak 横幅（三分支：isError 时不渲染，骨架不卡死） */}
       {statsQ.isPending ? (

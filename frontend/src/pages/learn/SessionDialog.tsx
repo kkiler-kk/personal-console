@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ACTIVITY_LABELS, LANGS, LANG_META } from "./constants"
 
 const MINUTE_PRESETS = [15, 30, 60, 90]
+// minutes 上限与后端 binding lte=14400 对齐（task 4.5）
+const MINUTES_MAX = 14400
 const ACTIVITY_OPTIONS = Object.entries(ACTIVITY_LABELS) as [ActivityType, string][]
 
 export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trigger?: ReactNode }) {
@@ -45,8 +47,12 @@ export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trig
   })
 
   const m = Number(minutes)
-  // 后端 minutes 绑定为 int（gte=0）：小数会被 400，前端先行拦截
-  const canSubmit = minutes.trim() !== "" && Number.isInteger(m) && m >= 0 && date !== "" && !create.isPending
+  // 后端 minutes 绑定为 int（gte=0,lte=14400）：小数/超限会被 400，前端先行拦截；
+  // date 禁未来（task 4.5）：与后端「date 不能晚于今天」400 对齐（YYYY-MM-DD 字典序即时间序）
+  const today = format(new Date(), "yyyy-MM-dd")
+  const canSubmit =
+    minutes.trim() !== "" && Number.isInteger(m) && m >= 0 && m <= MINUTES_MAX &&
+    date !== "" && date <= today && !create.isPending
 
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) reset() }}>
@@ -62,9 +68,9 @@ export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trig
         <div className="space-y-4 py-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>语言</Label>
+              <Label htmlFor="session-lang">语言</Label>
               <Select value={lang} onValueChange={(v) => setLang(v as Lang)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="session-lang" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {LANGS.map((l) => (
                     <SelectItem key={l} value={l}>{LANG_META[l].flag} {LANG_META[l].name}</SelectItem>
@@ -73,9 +79,9 @@ export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trig
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>类型</Label>
+              <Label htmlFor="session-activity">类型</Label>
               <Select value={activity} onValueChange={(v) => setActivity(v as ActivityType)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="session-activity" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {ACTIVITY_OPTIONS.map(([value, label]) => (
                     <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -87,7 +93,7 @@ export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trig
 
           <div className="space-y-1.5">
             <Label htmlFor="session-minutes">分钟</Label>
-            <Input id="session-minutes" type="number" min="0" step="1" inputMode="numeric"
+            <Input id="session-minutes" type="number" min="0" max={MINUTES_MAX} step="1" inputMode="numeric"
               value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="如 30" />
             <div className="flex gap-1.5 pt-1">
               {MINUTE_PRESETS.map((p) => (
@@ -101,7 +107,8 @@ export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trig
 
           <div className="space-y-1.5">
             <Label htmlFor="session-date">日期</Label>
-            <Input id="session-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            {/* max=今天（task 4.5）：原生日期选择器禁选未来，与后端 400 双保险 */}
+            <Input id="session-date" type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
           </div>
 
           <div className="space-y-1.5">
