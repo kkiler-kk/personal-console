@@ -23,6 +23,8 @@ export interface DashboardSummary {
 }
 export interface PostListResp { posts: Post[]; total: number; page: number; size: number }
 export interface ArchiveItem { year: number; month: number; count: number }
+export interface Habit { id: number; name: string; icon: string; color: string; archived: boolean; created_at: string }
+export interface HeatmapDay { date: string; count: number }
 
 export type AssetType = "stock" | "etf" | "metal" | "other"
 export type PriceSource = "yahoo" | "computed_gold_cny" | "manual"
