@@ -139,6 +139,21 @@ func autoMigrate(db *sqlx.DB) {
 			KEY idx_session_date (session_date),
 			KEY idx_lang_date (lang, session_date)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS habits (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			name VARCHAR(50) NOT NULL,
+			icon VARCHAR(16),
+			color VARCHAR(16),
+			archived BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+		`CREATE TABLE IF NOT EXISTS habit_logs (
+			habit_id BIGINT NOT NULL,
+			log_date DATE NOT NULL,
+			PRIMARY KEY (habit_id, log_date)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 	}
 
 	for _, sql := range statements {
@@ -158,6 +173,13 @@ func autoMigrate(db *sqlx.DB) {
 		if _, err := db.Exec("ALTER TABLE categories ADD COLUMN section VARCHAR(20) NOT NULL DEFAULT 'blog'"); err != nil {
 			log.Fatalf("auto migrate failed: %v", err)
 		}
+	}
+
+	// seed 随手记 category for the life module (idempotent via INSERT IGNORE on unique slug).
+	// Must run after categories.section exists. Cache staleness self-heals via 30min TTL
+	// (autoMigrate has no redis client by design — do not refactor main.go for this).
+	if _, err := db.Exec(`INSERT IGNORE INTO categories (name, slug, section) VALUES ('随手记', 'notes', 'life')`); err != nil {
+		log.Fatalf("auto migrate failed: %v", err)
 	}
 
 	// widen assets.price_source to fit 'computed_gold_cny' (17 chars > legacy VARCHAR(16)); idempotent

@@ -133,3 +133,17 @@ type StudySession struct {
 	Note        string    `json:"note" db:"note"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
+
+type Habit struct {
+	ID        int64     `json:"id" db:"id"`
+	Name      string    `json:"name" db:"name"`
+	Icon      string    `json:"icon" db:"icon"` // nullable column — queries should IFNULL (task 4.2)
+	Color     string    `json:"color" db:"color"`
+	Archived  bool      `json:"archived" db:"archived"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+type HabitLog struct {
+	HabitID int64     `json:"habit_id" db:"habit_id"`
+	LogDate time.Time `json:"log_date" db:"log_date"`
+}
