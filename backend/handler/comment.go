@@ -52,24 +52,46 @@ func (h *CommentHandler) List(c *gin.Context) {
 		}
 	}
 
-	// build tree: top-level comments first, replies nested under parent
-	commentMap := make(map[int64]*model.Comment, len(comments))
-	var roots []model.Comment
+	// build tree: top-level comments first, replies nested under parent.
+	// Assembly works on indices into the comments slice and is materialized
+	// depth-first, so a child is fully assembled (its own replies attached)
+	// before it is copied into its parent. Copying earlier — or storing copies
+	// in the id map — would silently drop every nested level.
+	indexByID := make(map[int64]int, len(comments))
 	for i := range comments {
-		cmt := comments[i]
-		commentMap[cmt.ID] = &cmt
+		indexByID[comments[i].ID] = i
 	}
+
+	childrenOf := make([][]int, len(comments))
+	var rootIdx []int
 	for i := range comments {
-		cmt := comments[i]
-		if cmt.ParentID == nil {
-			roots = append(roots, cmt)
-		} else {
-			if parent, ok := commentMap[*cmt.ParentID]; ok {
-				parent.Replies = append(parent.Replies, cmt)
-			} else {
-				roots = append(roots, cmt)
-			}
+		parentID := comments[i].ParentID
+		if parentID == nil {
+			rootIdx = append(rootIdx, i)
+			continue
 		}
+		// orphan (parent deleted or belongs to another post): keep as root
+		if p, ok := indexByID[*parentID]; ok && p != i {
+			childrenOf[p] = append(childrenOf[p], i)
+			continue
+		}
+		rootIdx = append(rootIdx, i)
+	}
+
+	var build func(int) model.Comment
+	build = func(i int) model.Comment {
+		cmt := comments[i]
+		for _, child := range childrenOf[i] {
+			cmt.Replies = append(cmt.Replies, build(child))
+		}
+		return cmt
+	}
+
+	// nil (not empty slice) on purpose: keeps the wire format for a post with
+	// no comments identical to before ({"comments":null,"total":0}).
+	var roots []model.Comment
+	for _, i := range rootIdx {
+		roots = append(roots, build(i))
 	}
 
 	// reverse roots so newest is first
