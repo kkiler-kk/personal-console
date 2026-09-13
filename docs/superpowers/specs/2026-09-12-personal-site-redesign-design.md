@@ -167,7 +167,7 @@ CREATE TABLE habit_logs (
 
 - 前端持仓页/Dashboard **每 60s 轮询** `GET /api/quotes?symbols=...`（页面不可见时暂停）。
 - 后端 Redis 缓存报价 60s，防止对上游限流。
-- **每日快照任务**（Go 内 robfig/cron）：每天北京时间 06:00（美股收盘后）把各资产价格写入 `price_history`（积存金参考价同日快照）；服务重启当日未快照则补跑。新资产创建时回填近一年历史（Yahoo chart API / Stooq 日线 / 天天基金 `lsjz` 分页，按 symbol 形态自动选源）。
+- **每日快照任务**（Go 内 robfig/cron）：每天北京时间 06:00（美股收盘后）把各资产价格写入 `price_history`（积存金参考价同日快照）；服务重启当日未快照则补跑。新资产创建时回填近一年历史（Yahoo chart API / 天天基金 `lsjz` 分页，按 symbol 形态自动选源；Stooq 仅供实时报价不提供历史）。
 - 上游请求走 HTTP 代理，代理地址由 `.env` 的 `QUOTE_PROXY`（默认 `http://127.0.0.1:7890`）配置，可置空关闭。
 
 ### 4.3 银行积存金（人民币/克）
