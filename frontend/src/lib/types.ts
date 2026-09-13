@@ -27,8 +27,8 @@ export interface ArchiveItem { year: number; month: number; count: number }
 export interface Habit { id: number; name: string; icon: string; color: string; archived: boolean; created_at: string; checked_today: boolean }
 export interface HeatmapDay { date: string; count: number }
 
-export type AssetType = "stock" | "etf" | "metal" | "other"
-export type PriceSource = "yahoo" | "computed_gold_cny" | "manual"
+export type AssetType = "stock" | "etf" | "metal" | "fund" | "other"
+export type PriceSource = "yahoo" | "computed_gold_cny" | "manual" | "fund_cn"
 export interface Asset {
   id: number; symbol: string; name: string; type: AssetType; price_source: PriceSource
   currency: "USD" | "CNY"; current_price: number | null; price_updated_at: string | null

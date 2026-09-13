@@ -17,10 +17,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
-const TYPE_LABEL: Record<AssetType, string> = { stock: "股票", etf: "ETF", metal: "黄金", other: "其他" }
+const TYPE_LABEL: Record<AssetType, string> = { stock: "股票", etf: "ETF", metal: "黄金", fund: "基金", other: "其他" }
+// 类型 Badge 变体：fund 用 secondary 与 etf（outline）区分，其余保持既有 outline
+const TYPE_VARIANT: Record<AssetType, "secondary" | "outline"> = { stock: "outline", etf: "outline", metal: "outline", fund: "secondary", other: "outline" }
+
+// 持仓表类型筛选 Tab：只过滤持仓表行；汇总卡/曲线/占比/流水保持全局口径。
+// invalid 行按其 asset.type 归组（与行过滤同一谓词），「全部」计数恒等于 positions.length。
+type TypeFilter = "all" | AssetType
+const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
+  { value: "all", label: "全部" }, { value: "stock", label: "股票" }, { value: "etf", label: "ETF" },
+  { value: "fund", label: "基金" }, { value: "metal", label: "黄金" }, { value: "other", label: "其他" },
+]
 
 // 涨绿跌红（仓库约定）：up #16a34a / down #dc2626
 const pnlCls = (v: number | null) => v == null ? "" : v >= 0 ? "text-[#16a34a]" : "text-[#dc2626]"
@@ -40,6 +51,8 @@ export default function InvestPage() {
   const qc = useQueryClient()
   // 隐私遮蔽开关：隐藏数量/均价/市值/盈亏等个人数字（现价/日涨跌/PE 等公开行情不隐藏）
   const [masked, setMasked] = useInvestMask()
+  // 持仓表类型筛选：仅作用于持仓表行，与遮蔽开关正交（Tab 不含金额，遮蔽逻辑在单元格内不变）
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all")
   const positionsQ = useQuery({ queryKey: ["positions"], queryFn: api.getPositions, refetchInterval: 60_000 })
   const historyQ = useQuery({ queryKey: ["positions-history", 90], queryFn: () => api.getPositionsHistory(90) })
   const tradesQ = useQuery({ queryKey: ["trades"], queryFn: () => api.getTrades() })
@@ -51,6 +64,10 @@ export default function InvestPage() {
   const assets = assetsQ.data?.assets ?? []
   const history = historyQ.data?.points ?? []
   const trades = (tradesQ.data?.trades ?? []).slice(0, 50)
+
+  // Tab 计数与行过滤同源：同一 positions、同一 `p.asset.type === v` 谓词，保证角标数与可见行数一致
+  const visiblePositions = typeFilter === "all" ? positions : positions.filter((p) => p.asset.type === typeFilter)
+  const countByFilter = (v: TypeFilter) => (v === "all" ? positions : positions.filter((p) => p.asset.type === v)).length
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["positions"] })
@@ -138,7 +155,20 @@ export default function InvestPage() {
 
           {/* 持仓表 */}
           <section className="space-y-2">
-            <h2 className="text-sm font-medium text-muted-foreground">持仓</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-medium text-muted-foreground">持仓</h2>
+              {/* 类型筛选 Tab：只过滤下方持仓表行；汇总卡/曲线/占比/流水保持全局口径不随筛选变 */}
+              <Tabs value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
+                <TabsList>
+                  {TYPE_FILTERS.map((f) => (
+                    <TabsTrigger key={f.value} value={f.value}>
+                      {f.label}
+                      <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[10px] leading-4 tnum">{countByFilter(f.value)}</span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
             <div className="rounded-xl border border-border bg-card overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -156,9 +186,11 @@ export default function InvestPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {positions.length === 0 ? (
-                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-10">还没有资产，点右上角「添加资产」开始</TableCell></TableRow>
-                  ) : positions.map((p) => {
+                  {visiblePositions.length === 0 ? (
+                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-10">
+                      {positions.length === 0 ? "还没有资产，点右上角「添加资产」开始" : "该类型下暂无持仓"}
+                    </TableCell></TableRow>
+                  ) : visiblePositions.map((p) => {
                     const a = p.asset
                     const invalid = p.invalid === true
                     const cleared = !invalid && p.quantity === 0
@@ -177,7 +209,7 @@ export default function InvestPage() {
                               </div>
                               <div className="text-xs text-muted-foreground tnum">{a.symbol}</div>
                             </div>
-                            <Badge variant="outline">{TYPE_LABEL[a.type] ?? "其他"}</Badge>
+                            <Badge variant={TYPE_VARIANT[a.type] ?? "outline"}>{TYPE_LABEL[a.type] ?? "其他"}</Badge>
                           </div>
                         </TableCell>
                         <TableCell className="text-right tnum">{maskValue(fmtQty(p.quantity), masked)}</TableCell>
