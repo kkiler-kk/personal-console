@@ -1,9 +1,7 @@
 import { Routes, Route } from "react-router-dom"
 import { Compass } from "lucide-react"
 import { AppLayout } from "@/components/layout/AppLayout"
-import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { PagePlaceholder } from "@/components/PagePlaceholder"
-import Login from "@/pages/Login"
 import Dashboard from "@/pages/Dashboard"
 import InvestPage from "@/pages/invest/InvestPage"
 import LearnPage from "@/pages/learn/LearnPage"
@@ -24,8 +22,7 @@ import AdminProfile from "@/pages/admin/AdminProfile"
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+      <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/invest" element={<InvestPage />} />
         <Route path="/learn" element={<LearnPage />} />

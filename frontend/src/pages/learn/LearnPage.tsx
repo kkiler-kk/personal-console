@@ -24,10 +24,12 @@ export default function LearnPage() {
   const profiles = profilesQ.data?.profiles ?? []
   const stats = statsQ.data
 
+  // 含 ["learn-sessions"]：录学习后管理后台学习记录（AdminSessions）与总览（AdminOverview）即时刷新，闭环 30s staleTime 陈旧窗口
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["learn-profiles"] })
     qc.invalidateQueries({ queryKey: ["learn-stats"] })
     qc.invalidateQueries({ queryKey: ["learn-calendar"] })
+    qc.invalidateQueries({ queryKey: ["learn-sessions"] })
     qc.invalidateQueries({ queryKey: ["dashboard"] })
   }
 

@@ -2,8 +2,6 @@ import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Habit,
 
 const BASE = "/api"
 
-function getToken(): string | null { return localStorage.getItem("token") }
-
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -12,12 +10,11 @@ export class ApiError extends Error {
   }
 }
 
+// 单用户本地部署：无 token 注入、无 401 跳转分支（后端已去认证，401 不可能出现）
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { ...(options.headers as Record<string, string>) }
   const isForm = options.body instanceof FormData
   if (!isForm) headers["Content-Type"] = "application/json"
-  const token = getToken()
-  if (token) headers["Authorization"] = `Bearer ${token}`
 
   let res: Response
   try {
@@ -29,13 +26,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   // 有意使用 any：后端各端点响应形态不一，且需兼容 204/空 body 的宽松解析
   let data: any = null
   try { data = await res.json() } catch { /* 204 等无 body 场景 */ }
-  if (!res.ok) {
-    if (res.status === 401) {
-      localStorage.removeItem("token"); localStorage.removeItem("user")
-      if (!location.pathname.startsWith("/login")) location.href = "/login"
-    }
-    throw new ApiError(res.status, data?.error || `请求失败 (${res.status})`)
-  }
+  if (!res.ok) throw new ApiError(res.status, data?.error || `请求失败 (${res.status})`)
   return data as T
 }
 
@@ -49,8 +40,6 @@ const qs = (p: Record<string, string | number | undefined>) => {
 export interface PostInput { title: string; summary?: string; content: string; tags?: string[]; category_id?: number | null; status?: "published" | "draft" }
 
 export const api = {
-  login: (username: string, password: string) =>
-    request<{ token: string; user: AuthUser }>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   getProfile: () => request<AuthUser & { bio: string; created_at: string }>("/user/profile"),
   updateProfile: (body: { nickname?: string; avatar?: string; bio?: string }) =>
     request<{ message: string }>("/user/profile", { method: "PUT", body: JSON.stringify(body) }),

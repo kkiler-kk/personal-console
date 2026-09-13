@@ -1,74 +1,32 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { toast } from "sonner"
-import { api, ApiError } from "@/lib/api"
+import { api } from "@/lib/api"
 import type { AuthUser } from "@/lib/types"
 
 interface AuthCtx {
   user: AuthUser | null
-  token: string | null
-  isAdmin: boolean
-  login: (username: string, password: string) => Promise<void>
-  logout: () => void
-  /** 重拉 profile 刷新 user state+localStorage（用于资料保存后同步 Topbar/Dashboard）；纯加法不改既有契约 */
+  /** 重拉 profile 刷新 user state（用于资料保存后同步 Topbar/Dashboard）；mount 时也调用 */
   refresh: () => Promise<void>
 }
 
 const Ctx = createContext<AuthCtx>(null!)
 export const useAuth = () => useContext(Ctx)
 
+// 单用户本地部署：无 token/login/logout。mount 时拉 profile 组 user；
+// 失败仅 toast 不阻塞——站点照常可用，仅问候语/头像缺失
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"))
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    try {
-      const raw = localStorage.getItem("user")
-      return raw ? (JSON.parse(raw) as AuthUser) : null
-    } catch {
-      // 损坏的 JSON：清理并视为未登录，避免初始化 throw 导致全站白屏
-      localStorage.removeItem("user")
-      return null
-    }
-  })
+  const [user, setUser] = useState<AuthUser | null>(null)
 
-  // 启动时用 profile 校验 token 有效性；失败则清理
-  useEffect(() => {
-    if (!token) return
-    api.getProfile()
-      .then((p) => {
-        const u = { id: p.id, username: p.username, nickname: p.nickname, avatar: p.avatar }
-        setUser(u); localStorage.setItem("user", JSON.stringify(u))
-      })
-      .catch((err) => {
-        if (err instanceof ApiError && err.status === 401) {
-          // token 确认失效：同步清理 React state（api.ts 的 401 处理器已清 localStorage 并跳转）
-          setToken(null); setUser(null)
-          localStorage.removeItem("token"); localStorage.removeItem("user")
-        }
-        // 网络错误/5xx：保留会话，下次请求自然重试
-      })
-  }, [token])
-
-  const login = async (username: string, password: string) => {
-    const { token: t, user: u } = await api.login(username, password)
-    localStorage.setItem("token", t); localStorage.setItem("user", JSON.stringify(u))
-    setToken(t); setUser(u)
-  }
-  const logout = () => {
-    localStorage.removeItem("token"); localStorage.removeItem("user")
-    setToken(null); setUser(null)
-  }
-
-  // 手动刷新（AdminProfile 保存后调用）：重拉 profile 组 AuthUser 写 state+localStorage，
-  // 驱动 Topbar/Dashboard 即时更新。失败仅 toast 不清会话——401 的清理与跳转由 api 层既有逻辑负责
   const refresh = async () => {
     try {
       const p = await api.getProfile()
-      const u = { id: p.id, username: p.username, nickname: p.nickname, avatar: p.avatar }
-      setUser(u); localStorage.setItem("user", JSON.stringify(u))
+      setUser({ id: p.id, username: p.username, nickname: p.nickname, avatar: p.avatar })
     } catch {
-      toast.error("刷新用户信息失败")
+      toast.error("加载用户信息失败")
     }
   }
 
-  // 单用户站点：登录者即管理员（后端“第一个用户是管理员”）
-  return <Ctx.Provider value={{ user, token, isAdmin: !!token, login, logout, refresh }}>{children}</Ctx.Provider>
+  useEffect(() => { refresh() }, [])
+
+  return <Ctx.Provider value={{ user, refresh }}>{children}</Ctx.Provider>
 }

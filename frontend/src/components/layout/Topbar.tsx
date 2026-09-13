@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Moon, Search, Sun, User, LogOut, Settings2 } from "lucide-react"
+import { Moon, Search, Sun, User, Settings2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/context/AuthContext"
@@ -8,7 +8,7 @@ import { useTheme } from "@/context/ThemeContext"
 import { CommandPalette } from "./CommandPalette"
 
 export function Topbar() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const { theme, toggle } = useTheme()
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
@@ -38,7 +38,6 @@ export function Topbar() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => navigate("/admin")}><Settings2 className="size-4" /> 管理后台</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => { logout(); navigate("/login") }}><LogOut className="size-4" /> 退出登录</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <CommandPalette open={open} onOpenChange={setOpen} />
