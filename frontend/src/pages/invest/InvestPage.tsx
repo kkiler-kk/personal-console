@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api"
 import type { Asset, AssetType, PositionRow, PositionsResp } from "@/lib/types"
 import { formatMoney, formatDate, formatDateTime } from "@/lib/format"
 import { MASK, maskValue, useInvestMask } from "@/lib/mask"
+import { CURRENCY_SYMBOL, convertFromCNY, useDisplayCurrency } from "@/lib/displayCurrency"
 import { cn } from "@/lib/utils"
 import { StatCard } from "@/components/StatCard"
 import { ErrorState, errorText } from "@/components/ErrorState"
@@ -77,6 +78,8 @@ export default function InvestPage() {
   const qc = useQueryClient()
   // 隐私遮蔽开关：隐藏数量/均价/市值/盈亏等个人数字（现价/日涨跌/PE 等公开行情不隐藏）
   const [masked, setMasked] = useInvestMask()
+  // 汇总层显示币种（¥/$ 切换）：与 Dashboard 同源（localStorage + storage 事件），只影响下方三张汇总卡
+  const { currency, toggle } = useDisplayCurrency()
   // 持仓表类型筛选：仅作用于持仓表行，与遮蔽开关正交（Tab 不含金额，遮蔽逻辑在单元格内不变）
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all")
   // 列头三态排序态：sortKey===null 即自定义序（后端 sort_order，拖拽可用）
@@ -178,6 +181,10 @@ export default function InvestPage() {
 
   const heldCount = positions.filter((p) => p.quantity > 0).length
   const fx = summary?.fx_usdcny ?? 1
+  // 汇率不可用（缺失/<=0）时禁用切换，且展示币种强制回落 CNY——
+  // 防御持久化的 USD 偏好配上坏汇率后把未换算的 CNY 数值错挂 US$ 前缀
+  const fxUsable = Number.isFinite(fx) && fx > 0
+  const displayCurrency = currency === "USD" && fxUsable ? "USD" : "CNY"
   const totalVal = summary?.total_value_cny ?? 0
   // 资产占比：每资产原币市值折算 CNY 后占总值百分比（spec 饼图降级为占比条，YAGNI）
   const allocation = positions
@@ -235,14 +242,25 @@ export default function InvestPage() {
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {/* 遮蔽时盈亏色也归中性（pnlCls(null)），避免红绿泄露盈亏方向；汇率为公开行情不遮蔽 */}
+              {/* 币种切换按钮在总资产卡 action 槽：显示目标币种符号（当前 ¥ → "$"）；fx 不可用禁用。
+                  遮蔽优先于币种：三卡先判 masked（MASK/中性色），非遮蔽才走 convertFromCNY 换算；pct 无币种不换算 */}
               <StatCard title="总资产" icon={Wallet}
-                value={summary ? maskValue(formatMoney(summary.total_value_cny, "CNY"), masked) : "—"}
+                action={
+                  <Button variant="ghost" size="icon-sm" data-testid="currency-toggle"
+                    disabled={!fxUsable}
+                    aria-label={fxUsable ? (displayCurrency === "CNY" ? "切换为美元显示" : "切换为人民币显示") : "汇率不可用"}
+                    title={fxUsable ? (displayCurrency === "CNY" ? "切换为美元显示" : "切换为人民币显示") : "汇率不可用"}
+                    onClick={toggle}>
+                    <span className="tnum text-sm">{CURRENCY_SYMBOL[displayCurrency === "CNY" ? "USD" : "CNY"]}</span>
+                  </Button>
+                }
+                value={summary ? maskValue(formatMoney(convertFromCNY(summary.total_value_cny, displayCurrency, fx), displayCurrency), masked) : "—"}
                 sub={summary ? `1 USD = ¥${fx.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}` : undefined} />
               <StatCard title="总盈亏" icon={TrendingUp}
-                value={summary ? (masked ? MASK : <span className={pnlCls(summary.total_pnl_cny)}>{signedMoney(summary.total_pnl_cny, "CNY")}</span>) : "—"}
+                value={summary ? (masked ? MASK : <span className={pnlCls(summary.total_pnl_cny)}>{signedMoney(convertFromCNY(summary.total_pnl_cny, displayCurrency, fx), displayCurrency)}</span>) : "—"}
                 sub={summary ? (masked ? MASK : <span className={pnlCls(summary.total_pnl_cny)}>{signedPct(summary.total_pnl_pct)}</span>) : undefined} />
               <StatCard title="今日盈亏" icon={Activity}
-                value={summary?.day_pnl_cny == null ? "—" : masked ? MASK : <span className={pnlCls(summary.day_pnl_cny)}>{signedMoney(summary.day_pnl_cny, "CNY")}</span>} />
+                value={summary?.day_pnl_cny == null ? "—" : masked ? MASK : <span className={pnlCls(summary.day_pnl_cny)}>{signedMoney(convertFromCNY(summary.day_pnl_cny, displayCurrency, fx), displayCurrency)}</span>} />
               <StatCard title="持仓数" icon={Layers} value={String(heldCount)} sub="个资产" />
             </div>
           )}

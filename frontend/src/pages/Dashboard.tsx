@@ -6,6 +6,7 @@ import { api } from "@/lib/api"
 import { compactWindowStart } from "@/lib/dates"
 import { formatDuration } from "@/lib/duration"
 import { MASK, maskValue, useInvestMask } from "@/lib/mask"
+import { CURRENCY_SYMBOL, convertFromCNY, useDisplayCurrency } from "@/lib/displayCurrency"
 import { StatCard } from "@/components/StatCard"
 import { ValueChart } from "@/components/charts/ValueChart"
 import { HabitHeatmap } from "@/components/charts/HabitHeatmap"
@@ -22,6 +23,8 @@ export default function Dashboard() {
   const { user } = useAuth()
   // 投资隐私遮蔽：与 InvestPage 页头开关同源（localStorage + storage 事件跨标签同步）
   const [masked, setMasked] = useInvestMask()
+  // 汇总显示币种：与 InvestPage 同源（同一 localStorage 键 + storage 事件），Dashboard 只跟随、不设切换入口
+  const { currency } = useDisplayCurrency()
   const { data, isPending } = useQuery({ queryKey: ["dashboard"], queryFn: api.getDashboardSummary })
   const positionsQ = useQuery({ queryKey: ["positions"], queryFn: api.getPositions })
   const historyQ = useQuery({ queryKey: ["positions-history", 30], queryFn: () => api.getPositionsHistory(30) })
@@ -51,10 +54,16 @@ export default function Dashboard() {
   const hasPositions = (positionsQ.data?.positions ?? []).length > 0
   const curve = historyQ.data?.points ?? []
 
-  // 遮蔽时盈亏色一并归中性，避免红绿泄露方向；无持仓保持 "—"/「去添加资产」语义
+  // 组合卡跟随投资页币种：汇率不可用时回落 CNY（与 InvestPage 同一防御，见 displayCurrency.convertFromCNY）。
+  // 遮蔽优先于币种：portfolioValue/Sub 先判 masked 才走换算；pct 无币种不换算。
+  const fx = summary?.fx_usdcny ?? 1
+  const displayCurrency = currency === "USD" && Number.isFinite(fx) && fx > 0 ? "USD" : "CNY"
   const portfolioValue = !summary || !hasPositions
     ? "—"
-    : maskValue(`¥${Math.round(summary.total_value_cny).toLocaleString("zh-CN")}`, masked)
+    : maskValue(
+        `${CURRENCY_SYMBOL[displayCurrency]}${Math.round(convertFromCNY(summary.total_value_cny, displayCurrency, fx)).toLocaleString("zh-CN")}`,
+        masked,
+      )
   const portfolioSub = positionsQ.isPending
     ? undefined
     : !summary || !hasPositions
@@ -63,7 +72,7 @@ export default function Dashboard() {
         ? MASK
         : (
           <span className={pnlCls(summary.total_pnl_cny)}>
-            {signedInt(summary.total_pnl_cny)}（{summary.total_pnl_pct >= 0 ? "+" : "−"}{Math.abs(summary.total_pnl_pct).toFixed(2)}%）
+            {signedInt(convertFromCNY(summary.total_pnl_cny, displayCurrency, fx))}（{summary.total_pnl_pct >= 0 ? "+" : "−"}{Math.abs(summary.total_pnl_pct).toFixed(2)}%）
           </span>
         )
 
