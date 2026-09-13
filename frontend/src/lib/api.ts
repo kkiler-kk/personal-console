@@ -89,6 +89,8 @@ export const api = {
   updateAsset: (id: number, body: { name: string }) => request<{ message: string }>(`/assets/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteAsset: (id: number) => request<{ message: string }>(`/assets/${id}`, { method: "DELETE" }),
   updateAssetPrice: (id: number, price: number) => request<{ message: string }>(`/assets/${id}/price`, { method: "PUT", body: JSON.stringify({ price }) }),
+  // 拖拽排序持久化（Task 4）：ids 必须是全量 asset id 的新序排列（后端严格校验集合一致，缺一/多一/重复均 400）
+  reorderAssets: (ids: number[]) => request<{ message: string }>("/assets/reorder", { method: "PUT", body: JSON.stringify({ ids }) }),
   getTrades: (assetId?: number) => request<{ trades: Trade[] }>(`/trades${qs({ asset_id: assetId })}`),
   createTrade: (body: { asset_id: number; side: "buy" | "sell"; quantity: number; price: number; fee: number; traded_at: string; note?: string }) =>
     request<{ id: number }>("/trades", { method: "POST", body: JSON.stringify(body) }),

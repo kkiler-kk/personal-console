@@ -32,7 +32,8 @@ export type PriceSource = "yahoo" | "computed_gold_cny" | "manual" | "fund_cn"
 export interface Asset {
   id: number; symbol: string; name: string; type: AssetType; price_source: PriceSource
   currency: "USD" | "CNY"; current_price: number | null; price_updated_at: string | null
-  created_at: string; updated_at: string
+  // 自定义展示顺序（Task 3 后端持久化，Task 4 前端拖拽消费）：List/positions 按其升序返回
+  sort_order: number; created_at: string; updated_at: string
 }
 export interface Trade {
   id: number; asset_id: number; side: "buy" | "sell"; quantity: number; price: number
