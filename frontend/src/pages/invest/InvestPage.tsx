@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { Wallet, TrendingUp, Activity, Layers, Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
@@ -23,16 +24,17 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
-const TYPE_LABEL: Record<AssetType, string> = { stock: "股票", etf: "ETF", metal: "黄金", fund: "基金", other: "其他" }
+// 类型 Badge 文案键（表格行 + AssetDialog 类型 Select 复用同一组 invest.type.*）
+const TYPE_LABEL_KEY: Record<AssetType, string> = { stock: "invest.type.stock", etf: "invest.type.etf", metal: "invest.type.metal", fund: "invest.type.fund", other: "invest.type.other" }
 // 类型 Badge 变体：fund 用 secondary 与 etf（outline）区分，其余保持既有 outline
 const TYPE_VARIANT: Record<AssetType, "secondary" | "outline"> = { stock: "outline", etf: "outline", metal: "outline", fund: "secondary", other: "outline" }
 
 // 持仓表类型筛选 Tab：只过滤持仓表行；汇总卡/曲线/占比/流水保持全局口径。
 // invalid 行按其 asset.type 归组（与行过滤同一谓词），「全部」计数恒等于 positions.length。
 type TypeFilter = "all" | AssetType
-const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
-  { value: "all", label: "全部" }, { value: "stock", label: "股票" }, { value: "etf", label: "ETF" },
-  { value: "fund", label: "基金" }, { value: "metal", label: "黄金" }, { value: "other", label: "其他" },
+const TYPE_FILTERS: { value: TypeFilter; labelKey: string }[] = [
+  { value: "all", labelKey: "invest.filter.all" }, { value: "stock", labelKey: "invest.type.stock" }, { value: "etf", labelKey: "invest.type.etf" },
+  { value: "fund", labelKey: "invest.type.fund" }, { value: "metal", labelKey: "invest.type.metal" }, { value: "other", labelKey: "invest.type.other" },
 ]
 
 // 涨绿跌红（仓库约定）：up #16a34a / down #dc2626
@@ -45,9 +47,9 @@ const fmtQty = (n: number) => n.toLocaleString("zh-CN", { maximumFractionDigits:
 // 回到 null 即恢复自定义（拖拽/后端 sort_order）顺序。可排序列 = 7 个数值列。
 type SortKey = "quantity" | "avg_cost" | "price" | "day_change_pct" | "pe_ttm" | "market_value" | "unrealized_pnl"
 type SortDir = "asc" | "desc"
-const SORT_LABEL: Record<SortKey, string> = {
-  quantity: "数量", avg_cost: "均价", price: "现价", day_change_pct: "日涨跌",
-  pe_ttm: "PE(TTM)", market_value: "市值", unrealized_pnl: "浮动盈亏",
+const SORT_LABEL_KEY: Record<SortKey, string> = {
+  quantity: "invest.col.quantity", avg_cost: "invest.col.avgCost", price: "invest.col.price", day_change_pct: "invest.col.dayChange",
+  pe_ttm: "invest.col.pe", market_value: "invest.col.marketValue", unrealized_pnl: "invest.col.unrealizedPnl",
 }
 // 从 PositionRow 取排序键值；quantity/avg_cost 后端恒非 null，其余可空（null 恒沉底）
 const sortVal = (p: PositionRow, k: SortKey): number | null => p[k]
@@ -66,15 +68,17 @@ function dropHalf(clientY: number, el: HTMLElement): "top" | "bottom" {
   return clientY < r.top + r.height / 2 ? "top" : "bottom"
 }
 
-// stale 报价的 price_updated_at 可能是 Go 零值时间（0001-01-01…），年份 <2000 视为未知
-function priceTimeLabel(iso: string | null): string {
-  if (!iso) return "时间未知"
+// stale 报价的 price_updated_at 可能是 Go 零值时间（0001-01-01…），年份 <2000 视为未知。
+// unknownLabel 由调用处传入（t("invest.stale.timeUnknown")），保持本函数为非 hook 纯函数。
+function priceTimeLabel(iso: string | null, unknownLabel: string): string {
+  if (!iso) return unknownLabel
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime()) || d.getFullYear() < 2000) return "时间未知"
+  if (Number.isNaN(d.getTime()) || d.getFullYear() < 2000) return unknownLabel
   return formatDateTime(iso)
 }
 
 export default function InvestPage() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   // 隐私遮蔽开关：隐藏数量/均价/市值/盈亏等个人数字（现价/日涨跌/PE 等公开行情不隐藏）
   const [masked, setMasked] = useInvestMask()
@@ -128,18 +132,18 @@ export default function InvestPage() {
 
   const updatePrice = useMutation({
     mutationFn: ({ id, price }: { id: number; price: number }) => api.updateAssetPrice(id, price),
-    onSuccess: () => { toast.success("已更新价格"); setPriceAsset(null); invalidateAll() },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "改价失败"),
+    onSuccess: () => { toast.success(t("invest.toast.priceUpdated")); setPriceAsset(null); invalidateAll() },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("invest.toast.priceFailed")),
   })
   const delAsset = useMutation({
     mutationFn: (id: number) => api.deleteAsset(id),
-    onSuccess: () => { toast.success("已删除资产"); invalidateAll() },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "删除失败"),
+    onSuccess: () => { toast.success(t("invest.toast.assetDeleted")); invalidateAll() },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("invest.toast.deleteFailed")),
   })
   const delTrade = useMutation({
     mutationFn: (id: number) => api.deleteTrade(id),
-    onSuccess: () => { toast.success("已删除交易"); invalidateAll() },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "删除失败"),
+    onSuccess: () => { toast.success(t("invest.toast.tradeDeleted")); invalidateAll() },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("invest.toast.deleteFailed")),
   })
 
   // 自定义顺序拖拽（HTML5 原生 DnD，未引库）：仅「全部」筛选 + sortKey===null 时可拖。
@@ -159,7 +163,7 @@ export default function InvestPage() {
       qc.invalidateQueries({ queryKey: ["dashboard"] })
     },
     onError: (e: unknown) => {
-      toast.error(e instanceof ApiError ? e.message : "保存顺序失败")
+      toast.error(e instanceof ApiError ? e.message : t("invest.toast.orderFailed"))
       qc.invalidateQueries({ queryKey: ["positions"] })
       qc.invalidateQueries({ queryKey: ["assets"] })
     },
@@ -206,8 +210,8 @@ export default function InvestPage() {
       aria-sort={sortKey === key ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
       <button type="button" onClick={() => cycleSort(key)} data-sort-key={key}
         className="inline-flex cursor-pointer items-center justify-end gap-1 hover:opacity-70"
-        title={sortKey === key ? (sortDir === "desc" ? "降序 · 点击切换升序" : "升序 · 点击恢复自定义顺序") : "点击按此列降序排序"}>
-        {SORT_LABEL[key]}
+        title={sortKey === key ? (sortDir === "desc" ? t("invest.sort.descHint") : t("invest.sort.ascHint")) : t("invest.sort.noneHint")}>
+        {t(SORT_LABEL_KEY[key])}
         {sortKey === key
           ? (sortDir === "desc" ? <ArrowDown className="size-3.5" /> : <ArrowUp className="size-3.5" />)
           : <ArrowUpDown className="size-3.5 opacity-40" />}
@@ -218,11 +222,11 @@ export default function InvestPage() {
   return (
     <div className="max-w-6xl space-y-5">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold flex items-center gap-2"><TrendingUp className="size-5" /> 投资</h1>
+        <h1 className="text-xl font-semibold flex items-center gap-2"><TrendingUp className="size-5" /> {t("nav.invest")}</h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon"
-            aria-label={masked ? "显示金额数字" : "隐藏金额数字"}
-            title={masked ? "显示金额数字" : "隐藏金额数字"}
+            aria-label={masked ? t("invest.showNumbers") : t("invest.hideNumbers")}
+            title={masked ? t("invest.showNumbers") : t("invest.hideNumbers")}
             onClick={() => setMasked(!masked)}>
             {masked ? <EyeOff /> : <Eye />}
           </Button>
@@ -233,7 +237,7 @@ export default function InvestPage() {
 
       {/* positions isError → 统一错误态（task 4.5）：汇总卡/持仓表整体不渲染，避免误导性「还没有资产」空态 */}
       {positionsQ.isError ? (
-        <ErrorState title="加载持仓失败" message={errorText(positionsQ.error)} onRetry={() => positionsQ.refetch()} />
+        <ErrorState title={t("invest.error.positionsFailed")} message={errorText(positionsQ.error)} onRetry={() => positionsQ.refetch()} />
       ) : (
         <>
           {/* 汇总 4 卡 */}
@@ -244,37 +248,37 @@ export default function InvestPage() {
               {/* 遮蔽时盈亏色也归中性（pnlCls(null)），避免红绿泄露盈亏方向；汇率为公开行情不遮蔽 */}
               {/* 币种切换按钮在总资产卡 action 槽：显示目标币种符号（当前 ¥ → "$"）；fx 不可用禁用。
                   遮蔽优先于币种：三卡先判 masked（MASK/中性色），非遮蔽才走 convertFromCNY 换算；pct 无币种不换算 */}
-              <StatCard title="总资产" icon={Wallet}
+              <StatCard title={t("invest.summary.totalValue")} icon={Wallet}
                 action={
                   <Button variant="ghost" size="icon-sm" data-testid="currency-toggle"
                     disabled={!fxUsable}
-                    aria-label={fxUsable ? (displayCurrency === "CNY" ? "切换为美元显示" : "切换为人民币显示") : "汇率不可用"}
-                    title={fxUsable ? (displayCurrency === "CNY" ? "切换为美元显示" : "切换为人民币显示") : "汇率不可用"}
+                    aria-label={fxUsable ? (displayCurrency === "CNY" ? t("invest.currency.toUsd") : t("invest.currency.toCny")) : t("invest.currency.unavailable")}
+                    title={fxUsable ? (displayCurrency === "CNY" ? t("invest.currency.toUsd") : t("invest.currency.toCny")) : t("invest.currency.unavailable")}
                     onClick={toggle}>
                     <span className="tnum text-sm">{CURRENCY_SYMBOL[displayCurrency === "CNY" ? "USD" : "CNY"]}</span>
                   </Button>
                 }
                 value={summary ? maskValue(formatMoney(convertFromCNY(summary.total_value_cny, displayCurrency, fx), displayCurrency), masked) : "—"}
-                sub={summary ? `1 USD = ¥${fx.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}` : undefined} />
-              <StatCard title="总盈亏" icon={TrendingUp}
+                sub={summary ? t("invest.summary.fxRate", { fx: fx.toLocaleString("zh-CN", { maximumFractionDigits: 4 }) }) : undefined} />
+              <StatCard title={t("invest.summary.totalPnl")} icon={TrendingUp}
                 value={summary ? (masked ? MASK : <span className={pnlCls(summary.total_pnl_cny)}>{signedMoney(convertFromCNY(summary.total_pnl_cny, displayCurrency, fx), displayCurrency)}</span>) : "—"}
                 sub={summary ? (masked ? MASK : <span className={pnlCls(summary.total_pnl_cny)}>{signedPct(summary.total_pnl_pct)}</span>) : undefined} />
-              <StatCard title="今日盈亏" icon={Activity}
+              <StatCard title={t("invest.summary.dayPnl")} icon={Activity}
                 value={summary?.day_pnl_cny == null ? "—" : masked ? MASK : <span className={pnlCls(summary.day_pnl_cny)}>{signedMoney(convertFromCNY(summary.day_pnl_cny, displayCurrency, fx), displayCurrency)}</span>} />
-              <StatCard title="持仓数" icon={Layers} value={String(heldCount)} sub="个资产" />
+              <StatCard title={t("invest.summary.holdings")} icon={Layers} value={String(heldCount)} sub={t("invest.summary.assetsUnit")} />
             </div>
           )}
 
           {/* 持仓表 */}
           <section className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-medium text-muted-foreground">持仓</h2>
+              <h2 className="text-sm font-medium text-muted-foreground">{t("invest.section.holdings")}</h2>
               {/* 类型筛选 Tab：只过滤下方持仓表行；汇总卡/曲线/占比/流水保持全局口径不随筛选变 */}
               <Tabs value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
                 <TabsList>
                   {TYPE_FILTERS.map((f) => (
                     <TabsTrigger key={f.value} value={f.value}>
-                      {f.label}
+                      {t(f.labelKey)}
                       <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[10px] leading-4 tnum">{countByFilter(f.value)}</span>
                     </TabsTrigger>
                   ))}
@@ -285,8 +289,8 @@ export default function InvestPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8" aria-label="拖拽把手" />
-                    <TableHead>资产</TableHead>
+                    <TableHead className="w-8" aria-label={t("invest.drag.headAria")} />
+                    <TableHead>{t("invest.col.asset")}</TableHead>
                     {sortHead("quantity")}
                     {sortHead("avg_cost")}
                     {sortHead("price")}
@@ -294,14 +298,14 @@ export default function InvestPage() {
                     {sortHead("pe_ttm")}
                     {sortHead("market_value")}
                     {sortHead("unrealized_pnl")}
-                    <TableHead className="text-right">已实现</TableHead>
-                    <TableHead className="w-28">操作</TableHead>
+                    <TableHead className="text-right">{t("invest.col.realized")}</TableHead>
+                    <TableHead className="w-28">{t("invest.col.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {visiblePositions.length === 0 ? (
                     <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-10">
-                      {positions.length === 0 ? "还没有资产，点右上角「添加资产」开始" : "该类型下暂无持仓"}
+                      {positions.length === 0 ? t("invest.empty.noAssets") : t("invest.empty.noPositionsOfType")}
                     </TableCell></TableRow>
                   ) : visiblePositions.map((p, i) => {
                     const a = p.asset
@@ -347,8 +351,8 @@ export default function InvestPage() {
                         <TableCell className="w-8 pr-0">
                           <span className={cn("flex items-center",
                             dragEnabled ? "cursor-grab text-muted-foreground" : "cursor-not-allowed text-muted-foreground/30")}
-                            aria-label="拖拽排序把手"
-                            title={dragEnabled ? "拖拽调整顺序" : "切换回『全部』且取消列排序后可拖拽"}>
+                            aria-label={t("invest.drag.handleAria")}
+                            title={dragEnabled ? t("invest.drag.enabledTitle") : t("invest.drag.disabledTitle")}>
                             <GripVertical className="size-4" />
                           </span>
                         </TableCell>
@@ -358,14 +362,14 @@ export default function InvestPage() {
                               <div className="font-medium flex items-center gap-1.5">
                                 <span className="truncate">{a.name}</span>
                                 {invalid ? (
-                                  <Badge variant="destructive" title="交易序列存在超卖，请检查该资产的流水">数据异常</Badge>
+                                  <Badge variant="destructive" title={t("invest.badge.invalidTitle")}>{t("invest.badge.invalid")}</Badge>
                                 ) : cleared ? (
-                                  <Badge variant="secondary">已清仓</Badge>
+                                  <Badge variant="secondary">{t("invest.badge.cleared")}</Badge>
                                 ) : null}
                               </div>
                               <div className="text-xs text-muted-foreground tnum">{a.symbol}</div>
                             </div>
-                            <Badge variant={TYPE_VARIANT[a.type] ?? "outline"}>{TYPE_LABEL[a.type] ?? "其他"}</Badge>
+                            <Badge variant={TYPE_VARIANT[a.type] ?? "outline"}>{t(TYPE_LABEL_KEY[a.type] ?? "invest.type.other")}</Badge>
                           </div>
                         </TableCell>
                         <TableCell className="text-right tnum">{maskValue(fmtQty(p.quantity), masked)}</TableCell>
@@ -375,7 +379,7 @@ export default function InvestPage() {
                             {p.price != null ? formatMoney(p.price, a.currency) : "—"}
                             {p.stale && (
                               <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/50"
-                                title={`报价可能延迟（更新于 ${priceTimeLabel(p.price_updated_at)}）`} />
+                                title={t("invest.stale.title", { time: priceTimeLabel(p.price_updated_at, t("invest.stale.timeUnknown")) })} />
                             )}
                           </span>
                         </TableCell>
@@ -391,22 +395,22 @@ export default function InvestPage() {
                         <TableCell>
                           <div className="flex items-center gap-0.5">
                             <TradeDialog assets={assets} initialAssetId={a.id} onSaved={invalidateAll}
-                              trigger={<Button variant="ghost" size="icon-sm" title="录交易"><Plus className="size-4" /></Button>} />
+                              trigger={<Button variant="ghost" size="icon-sm" title={t("invest.action.recordTrade")}><Plus className="size-4" /></Button>} />
                             {a.price_source === "manual" && (
-                              <Button variant="ghost" size="icon-sm" title="改价" onClick={() => openPrice(a)}><Pencil className="size-4" /></Button>
+                              <Button variant="ghost" size="icon-sm" title={t("invest.action.editPrice")} onClick={() => openPrice(a)}><Pencil className="size-4" /></Button>
                             )}
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon-sm" title="删除资产" className="text-destructive"><Trash2 className="size-4" /></Button>
+                                <Button variant="ghost" size="icon-sm" title={t("invest.action.deleteAsset")} className="text-destructive"><Trash2 className="size-4" /></Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle>删除资产「{a.name}」？</AlertDialogTitle>
-                                  <AlertDialogDescription>需先删除该资产的全部交易记录，否则无法删除。</AlertDialogDescription>
+                                  <AlertDialogTitle>{t("invest.confirm.deleteAssetTitle", { name: a.name })}</AlertDialogTitle>
+                                  <AlertDialogDescription>{t("invest.confirm.deleteAssetDesc")}</AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                  <AlertDialogCancel>取消</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => delAsset.mutate(a.id)}>删除</AlertDialogAction>
+                                  <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => delAsset.mutate(a.id)}>{t("common.delete")}</AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
@@ -425,25 +429,25 @@ export default function InvestPage() {
       {/* 收益曲线 + 资产占比 */}
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="space-y-2 lg:col-span-2">
-          <h2 className="text-sm font-medium text-muted-foreground">收益曲线（近 90 天 · CNY）</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">{t("invest.section.curve")}</h2>
           <div className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,.06)] p-4">
             {masked ? (
               // 遮蔽时整卡占位：Y 轴刻度会泄露绝对金额，不渲染 ValueChart
-              <p className="text-sm text-muted-foreground py-16 text-center">数字已隐藏</p>
+              <p className="text-sm text-muted-foreground py-16 text-center">{t("invest.numbersHidden")}</p>
             ) : historyQ.isError ? (
-              <ErrorState title="加载收益曲线失败" message={errorText(historyQ.error)} onRetry={() => historyQ.refetch()} />
+              <ErrorState title={t("invest.error.curveFailed")} message={errorText(historyQ.error)} onRetry={() => historyQ.refetch()} />
             ) : history.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-16 text-center">录入交易并等待每日快照后生成曲线</p>
+              <p className="text-sm text-muted-foreground py-16 text-center">{t("invest.empty.noCurve")}</p>
             ) : (
               <ValueChart points={history} />
             )}
           </div>
         </section>
         <section className="space-y-2">
-          <h2 className="text-sm font-medium text-muted-foreground">资产占比</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">{t("invest.section.allocation")}</h2>
           <div className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,.06)] p-4 space-y-3">
             {allocation.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-12 text-center">暂无市值数据</p>
+              <p className="text-sm text-muted-foreground py-12 text-center">{t("invest.empty.noMarketValue")}</p>
             ) : allocation.map((x) => {
               const pct = totalVal > 0 ? (x.valueCny / totalVal) * 100 : 0
               return (
@@ -464,51 +468,57 @@ export default function InvestPage() {
 
       {/* 交易流水（最近 50） */}
       <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">交易流水（最近 50 笔）</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">{t("invest.section.trades")}</h2>
         <div className="rounded-xl border border-border bg-card overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>日期</TableHead>
-                <TableHead>资产</TableHead>
-                <TableHead>方向</TableHead>
-                <TableHead className="text-right">数量</TableHead>
-                <TableHead className="text-right">单价</TableHead>
-                <TableHead className="text-right">费用</TableHead>
-                <TableHead>备注</TableHead>
+                <TableHead>{t("invest.trade.date")}</TableHead>
+                <TableHead>{t("invest.col.asset")}</TableHead>
+                <TableHead>{t("invest.trade.side")}</TableHead>
+                <TableHead className="text-right">{t("invest.col.quantity")}</TableHead>
+                <TableHead className="text-right">{t("invest.col.unitPrice")}</TableHead>
+                <TableHead className="text-right">{t("invest.col.fee")}</TableHead>
+                <TableHead>{t("invest.trade.note")}</TableHead>
                 <TableHead className="w-14" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {trades.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-10">暂无交易记录</TableCell></TableRow>
-              ) : trades.map((t) => {
-                const a = t.asset
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-10">{t("invest.empty.noTrades")}</TableCell></TableRow>
+              ) : trades.map((tr) => {
+                const a = tr.asset
                 const cur = a?.currency ?? "USD"
+                const sideLabel = tr.side === "buy" ? t("invest.side.buy") : t("invest.side.sell")
                 return (
-                  <TableRow key={t.id}>
-                    <TableCell className="tnum text-muted-foreground whitespace-nowrap">{formatDate(t.traded_at)}</TableCell>
-                    <TableCell className="font-medium">{a?.name ?? `#${t.asset_id}`}</TableCell>
-                    <TableCell><Badge variant={t.side === "buy" ? "secondary" : "destructive"}>{t.side === "buy" ? "买入" : "卖出"}</Badge></TableCell>
-                    <TableCell className="text-right tnum">{maskValue(fmtQty(t.quantity), masked)}</TableCell>
-                    <TableCell className="text-right tnum">{maskValue(formatMoney(t.price, cur), masked)}</TableCell>
-                    <TableCell className="text-right tnum">{maskValue(formatMoney(t.fee, cur), masked)}</TableCell>
-                    <TableCell className="text-muted-foreground max-w-[180px] truncate">{t.note || "—"}</TableCell>
+                  <TableRow key={tr.id}>
+                    <TableCell className="tnum text-muted-foreground whitespace-nowrap">{formatDate(tr.traded_at)}</TableCell>
+                    <TableCell className="font-medium">{a?.name ?? `#${tr.asset_id}`}</TableCell>
+                    <TableCell><Badge variant={tr.side === "buy" ? "secondary" : "destructive"}>{sideLabel}</Badge></TableCell>
+                    <TableCell className="text-right tnum">{maskValue(fmtQty(tr.quantity), masked)}</TableCell>
+                    <TableCell className="text-right tnum">{maskValue(formatMoney(tr.price, cur), masked)}</TableCell>
+                    <TableCell className="text-right tnum">{maskValue(formatMoney(tr.fee, cur), masked)}</TableCell>
+                    <TableCell className="text-muted-foreground max-w-[180px] truncate">{tr.note || "—"}</TableCell>
                     <TableCell>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon-sm" title="删除交易" className="text-destructive"><Trash2 className="size-4" /></Button>
+                          <Button variant="ghost" size="icon-sm" title={t("invest.action.deleteTrade")} className="text-destructive"><Trash2 className="size-4" /></Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>删除这笔交易？</AlertDialogTitle>
+                            <AlertDialogTitle>{t("invest.confirm.deleteTradeTitle")}</AlertDialogTitle>
                             <AlertDialogDescription>
-                              {formatDate(t.traded_at)} · {a?.name ?? ""} · {t.side === "buy" ? "买入" : "卖出"} {maskValue(fmtQty(t.quantity), masked)}，删除后持仓将重新计算。
+                              {t("invest.confirm.deleteTradeDesc", {
+                                date: formatDate(tr.traded_at),
+                                name: a?.name ?? "",
+                                side: sideLabel,
+                                qty: maskValue(fmtQty(tr.quantity), masked),
+                              })}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>取消</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => delTrade.mutate(t.id)}>删除</AlertDialogAction>
+                            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => delTrade.mutate(tr.id)}>{t("common.delete")}</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -525,19 +535,19 @@ export default function InvestPage() {
       <Dialog open={priceAsset != null} onOpenChange={(o) => { if (!o) setPriceAsset(null) }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>修改现价</DialogTitle>
+            <DialogTitle>{t("invest.price.dialogTitle")}</DialogTitle>
             <DialogDescription>{priceAsset?.name}（{priceAsset?.symbol}）</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5 py-1">
-            <Label htmlFor="price-input">现价（{priceAsset?.currency === "CNY" ? "¥" : "$"}）</Label>
+            <Label htmlFor="price-input">{t("invest.price.label", { cur: priceAsset?.currency === "CNY" ? "¥" : "$" })}</Label>
             <Input id="price-input" type="number" min="0" step="any" inputMode="decimal"
               value={priceVal} onChange={(e) => setPriceVal(e.target.value)} autoFocus />
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setPriceAsset(null)}>取消</Button>
+            <Button variant="ghost" onClick={() => setPriceAsset(null)}>{t("common.cancel")}</Button>
             <Button disabled={!priceValid || updatePrice.isPending}
               onClick={() => priceAsset && updatePrice.mutate({ id: priceAsset.id, price: priceValNum })}>
-              {updatePrice.isPending ? "保存中…" : "保存"}
+              {updatePrice.isPending ? t("common.saving") : t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>

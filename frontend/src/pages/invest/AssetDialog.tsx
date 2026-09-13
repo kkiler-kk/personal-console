@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useMutation } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { Plus } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
@@ -18,29 +19,23 @@ const ASHARE_SYMBOL_RE = /^\d{6}\.(SS|SZ)$/i
 // 中国基金代码形态轻校验：仅 toast 提示，不阻塞提交（后端 fund_cn 分支才是权威）
 const FUND_CN_SYMBOL_RE = /^\d{6}$/
 
-const PRESETS: { value: Preset; label: string; hint: string }[] = [
-  { value: "us", label: "美股 / ETF", hint: "Yahoo 自动报价 · USD" },
-  { value: "ashare", label: "A 股", hint: "Yahoo 自动报价 · CNY" },
-  { value: "gold", label: "银行积存金", hint: "系统计算金价 · CNY" },
-  { value: "fundcn", label: "中国基金", hint: "场外公募 · 每日净值 · CNY" },
-  { value: "manual", label: "手动资产", hint: "手动维护现价" },
-]
-
-const US_TYPES: { value: AssetType; label: string }[] = [
-  { value: "stock", label: "股票" }, { value: "etf", label: "ETF" },
-]
-const ALL_TYPES: { value: AssetType; label: string }[] = [
-  { value: "stock", label: "股票" }, { value: "etf", label: "ETF" },
-  { value: "metal", label: "黄金" }, { value: "fund", label: "基金" }, { value: "other", label: "其他" },
-]
+// 预设顺序（label/hint 走 i18n：invest.preset.{value}.label / .hint）
+const PRESET_ORDER: Preset[] = ["us", "ashare", "gold", "fundcn", "manual"]
+// 类型 Select 可选项（label 复用类型 Badge 键 invest.type.{value}）
+const US_TYPE_VALUES: AssetType[] = ["stock", "etf"]
+const ALL_TYPE_VALUES: AssetType[] = ["stock", "etf", "metal", "fund", "other"]
 
 export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [preset, setPreset] = useState<Preset>("us")
   const [symbol, setSymbol] = useState("")
   const [name, setName] = useState("")
   const [type, setType] = useState<AssetType>("stock")
   const [currency, setCurrency] = useState<"USD" | "CNY">("USD")
+
+  // gold 预设默认资产名（随 UI 语言）：与 gold 预设 label 同源，用作自动填充 + 哨兵清除 + create 兜底
+  const goldName = t("invest.preset.gold.label")
 
   const reset = () => {
     setPreset("us"); setSymbol(""); setName(""); setType("stock"); setCurrency("USD")
@@ -50,13 +45,13 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
     setPreset(p)
     if (p === "gold") {
       setSymbol(GOLD_SYMBOL); setType("metal"); setCurrency("CNY")
-      setName((n) => n.trim() === "" ? "银行积存金" : n)
+      setName((n) => n.trim() === "" ? goldName : n)
     } else {
       // 清除 gold 预设自动填充的残留值（仅当值恰为默认填充，不吞用户手动输入）。
       // fundcn 自身无自动填充值，切离时无需额外清理，type/currency 由下方目标分支重置
       //（manual 分支刻意保留用户已选 type/currency，与 gold→manual 既有行为一致）。
       setSymbol((s) => s === GOLD_SYMBOL ? "" : s)
-      setName((n) => n === "银行积存金" ? "" : n)
+      setName((n) => n === goldName ? "" : n)
       if (p === "us") {
         setType("stock"); setCurrency("USD")
       } else if (p === "ashare") {
@@ -71,7 +66,7 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
     mutationFn: () => {
       if (preset === "gold") {
         return api.createAsset({
-          symbol: GOLD_SYMBOL, name: name.trim() || "银行积存金",
+          symbol: GOLD_SYMBOL, name: name.trim() || goldName,
           type: "metal", price_source: "computed_gold_cny", currency: "CNY",
         })
       }
@@ -100,10 +95,10 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
       })
     },
     onSuccess: () => {
-      toast.success(preset === "manual" ? "已创建，请在持仓表点「改价」录入现价" : "已添加资产")
+      toast.success(preset === "manual" ? t("invest.toast.createdManual") : t("invest.toast.assetCreated"))
       setOpen(false); reset(); onCreated?.()
     },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "创建失败"),
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("invest.toast.createFailed")),
   })
 
   const symbolOk = preset === "gold" || symbol.trim().length > 0
@@ -113,68 +108,74 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
   // A 股 / 中国基金代码提交前轻校验：形态不符仅 toast 提示，不 return（后端仍是权威）
   const handleSubmit = () => {
     if (preset === "ashare" && !ASHARE_SYMBOL_RE.test(symbol.trim())) {
-      toast.warning("A 股代码通常为 600519.SS（沪）/ 000001.SZ（深），已提交（代码统一为大写）")
+      toast.warning(t("invest.toast.ashareHint"))
     }
     if (preset === "fundcn" && !FUND_CN_SYMBOL_RE.test(symbol.trim())) {
-      toast.warning("中国基金代码为 6 位数字，如 110022，已按输入提交（以后端校验为准）")
+      toast.warning(t("invest.toast.fundcnHint"))
     }
     create.mutate()
   }
 
+  const symbolPlaceholder =
+    preset === "us" ? t("invest.asset.symbolPlaceholderUs")
+    : preset === "ashare" ? t("invest.asset.symbolPlaceholderAshare")
+    : preset === "fundcn" ? t("invest.asset.symbolPlaceholderFundcn")
+    : t("invest.asset.symbolPlaceholderManual")
+
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset() }}>
       <DialogTrigger asChild>
-        <Button variant="outline"><Plus className="size-4" /> 添加资产</Button>
+        <Button variant="outline"><Plus className="size-4" /> {t("invest.asset.add")}</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>添加资产</DialogTitle>
-          <DialogDescription>选择资产类型，价格来源将自动配置</DialogDescription>
+          <DialogTitle>{t("invest.asset.dialogTitle")}</DialogTitle>
+          <DialogDescription>{t("invest.asset.dialogDesc")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
           <div className="grid grid-cols-2 gap-2">
-            {PRESETS.map((p) => (
-              <label key={p.value}
-                className={`cursor-pointer rounded-lg border p-2.5 text-center transition-colors ${preset === p.value ? "border-primary bg-accent" : "border-border hover:bg-muted/50"}`}>
-                <input type="radio" name="asset-preset" value={p.value} checked={preset === p.value}
-                  onChange={() => selectPreset(p.value)} className="sr-only" />
-                <span className="block text-sm font-medium">{p.label}</span>
-                <span className="mt-0.5 block text-[11px] text-muted-foreground leading-tight">{p.hint}</span>
+            {PRESET_ORDER.map((v) => (
+              <label key={v}
+                className={`cursor-pointer rounded-lg border p-2.5 text-center transition-colors ${preset === v ? "border-primary bg-accent" : "border-border hover:bg-muted/50"}`}>
+                <input type="radio" name="asset-preset" value={v} checked={preset === v}
+                  onChange={() => selectPreset(v)} className="sr-only" />
+                <span className="block text-sm font-medium">{t(`invest.preset.${v}.label`)}</span>
+                <span className="mt-0.5 block text-[11px] text-muted-foreground leading-tight">{t(`invest.preset.${v}.hint`)}</span>
               </label>
             ))}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="asset-symbol">代码</Label>
+            <Label htmlFor="asset-symbol">{t("invest.asset.symbol")}</Label>
             {preset === "gold" ? (
               <Input id="asset-symbol" value={GOLD_SYMBOL} readOnly className="bg-muted text-muted-foreground" />
             ) : (
-              <Input id="asset-symbol" placeholder={preset === "us" ? "美股如 AAPL；ETF 如 QQQ" : preset === "ashare" ? "600519.SS（沪）/ 000001.SZ（深）；ETF 如 510300.SS" : preset === "fundcn" ? "6 位基金代码，如 110022" : "自定义代码"}
+              <Input id="asset-symbol" placeholder={symbolPlaceholder}
                 value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} />
             )}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="asset-name">名称</Label>
-            <Input id="asset-name" placeholder={preset === "gold" ? "银行积存金" : "如 苹果、标普500ETF"}
+            <Label htmlFor="asset-name">{t("invest.asset.name")}</Label>
+            <Input id="asset-name" placeholder={preset === "gold" ? goldName : t("invest.asset.namePlaceholder")}
               value={name} onChange={(e) => setName(e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>类型</Label>
+              <Label>{t("invest.asset.type")}</Label>
               <Select value={type} onValueChange={(v) => setType(v as AssetType)} disabled={preset === "gold" || preset === "fundcn"}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(preset === "us" || preset === "ashare" ? US_TYPES : ALL_TYPES).map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  {(preset === "us" || preset === "ashare" ? US_TYPE_VALUES : ALL_TYPE_VALUES).map((opt) => (
+                    <SelectItem key={opt} value={opt}>{t(`invest.type.${opt}`)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>币种</Label>
+              <Label>{t("invest.asset.currency")}</Label>
               {preset === "manual" ? (
                 <Select value={currency} onValueChange={(v) => setCurrency(v as "USD" | "CNY")}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -191,15 +192,15 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
 
           {preset === "manual" && (
             <p className="text-xs text-muted-foreground rounded-md bg-muted/50 p-2">
-              手动资产不会自动取价，创建后请在持仓表点「改价」录入现价。
+              {t("invest.asset.manualNote")}
             </p>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => { setOpen(false); reset() }}>取消</Button>
+          <Button variant="ghost" onClick={() => { setOpen(false); reset() }}>{t("common.cancel")}</Button>
           <Button disabled={!canSubmit} onClick={handleSubmit}>
-            {create.isPending ? "创建中…" : "创建"}
+            {create.isPending ? t("common.creating") : t("common.create")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,7 +1,9 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { useTranslation } from "react-i18next"
 import type { CurvePoint } from "@/lib/types"
 
 export function ValueChart({ points, height = 260 }: { points: CurvePoint[]; height?: number }) {
+  const { t } = useTranslation()
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
@@ -14,9 +16,9 @@ export function ValueChart({ points, height = 260 }: { points: CurvePoint[]; hei
         <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.15} />
         <XAxis dataKey="date" tick={{ fontSize: 11, fill: "currentColor" }} tickFormatter={(v: string) => v.slice(5)} minTickGap={40} />
         <YAxis tick={{ fontSize: 11, fill: "currentColor" }} width={70} tickFormatter={(v: number) => `¥${(v / 1000).toFixed(1)}k`} domain={["auto", "auto"]} />
-        <Tooltip formatter={(v) => `¥${Number(v).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`} labelFormatter={(l) => `日期 ${l}`} />
-        <Area type="monotone" dataKey="value" name="市值" stroke="#4f46e5" fill="url(#vFill)" strokeWidth={2} isAnimationActive={false} />
-        <Area type="monotone" dataKey="cost" name="成本" stroke="#9ca3af" fill="none" strokeWidth={1.5} strokeDasharray="4 3" isAnimationActive={false} />
+        <Tooltip formatter={(v) => `¥${Number(v).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`} labelFormatter={(l) => t("invest.chart.date", { date: l })} />
+        <Area type="monotone" dataKey="value" name={t("invest.chart.value")} stroke="#4f46e5" fill="url(#vFill)" strokeWidth={2} isAnimationActive={false} />
+        <Area type="monotone" dataKey="cost" name={t("invest.chart.cost")} stroke="#9ca3af" fill="none" strokeWidth={1.5} strokeDasharray="4 3" isAnimationActive={false} />
       </AreaChart>
     </ResponsiveContainer>
   )

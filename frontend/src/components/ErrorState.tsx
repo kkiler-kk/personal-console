@@ -1,12 +1,14 @@
 import { AlertCircle, RefreshCw } from "lucide-react"
 import { useTranslation } from "react-i18next"
+import i18n from "@/i18n"
 import { Button } from "@/components/ui/button"
 
-// errorText 统一提取查询错误文案（仓库惯例：instanceof Error 三元的收敛版）
-// 注：fallback "未知错误" 为硬编码——本函数非 hook 无法直接 t()，签名改造涉及全站消费点，
-// 留待各模块任务（Task 2-4）接线 t 时处理，Task 5 硬编码审计兜底。
+// errorText 统一提取查询错误文案（仓库惯例：instanceof Error 三元的收敛版）。
+// 非 hook 纯函数：fallback 走 i18n 单例 i18n.t("errors.unknown")（零消费点改动），
+// 渲染期/toast 时调用即时求值当前语言；ErrorState 自身 useTranslation 订阅 languageChanged，
+// 语言切换重渲染时 message={errorText(...)} 会重新求值。后端 e.message 原样透传不译。
 export function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : "未知错误"
+  return e instanceof Error ? e.message : i18n.t("errors.unknown")
 }
 
 // ErrorState 全站统一错误态（task 4.5）：居中 AlertCircle 图标 + 文案 + 可选重试按钮。
