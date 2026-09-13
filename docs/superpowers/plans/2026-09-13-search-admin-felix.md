@@ -54,7 +54,7 @@ README.md / CLAUDE.md                文档（Task S4）
 
 ---
 
-### Task S1: 后端 —— search + learn sessions 端点
+### Task 1: 后端 —— search + learn sessions 端点
 
 **Files:** Create `backend/handler/search.go`；Modify `backend/handler/learn.go`、`backend/router/router.go`
 
@@ -80,7 +80,7 @@ README.md / CLAUDE.md                文档（Task S4）
 - [ ] **Step 4: 验证（PORT=8090，smoketest）**：造数据（发布文章标题含"测试搜索xyz"、建资产 NAMETEST、建习惯"测试习惯xyz"、录 session）→ `GET /api/search?q=测试搜索` 命中 posts；`q=NAMETEST`/`q=nametest`（大小写）命中 assets；`q=%` 不炸（转义生效，返回空或少量）；`q=` 空 → 400；51 字符 → 400；`GET /api/learn/sessions?limit=5` 形状对照；清理测试数据 + DEL dashboard:summary；build/vet/test 全绿（50 无回归）
 - [ ] **Step 5: Commit** `feat(backend): global search endpoint and learn sessions list`
 
-### Task S2: 前端 —— CommandPalette 真实搜索 + Felix 品牌
+### Task 2: 前端 —— CommandPalette 真实搜索 + Felix 品牌
 
 **Files:** Modify `frontend/src/lib/types.ts`、`frontend/src/lib/api.ts`、`frontend/src/components/layout/CommandPalette.tsx`、`frontend/src/components/layout/Sidebar.tsx`、`frontend/src/pages/Login.tsx`、`frontend/index.html`
 
@@ -98,7 +98,7 @@ README.md / CLAUDE.md                文档（Task S4）
 - [ ] **Step 4: 验证**：tsc×2/build 零错误；8090 后端造数据 → dev 3001：⌘K 输入关键词 HTML 层面无法断言（无头可选 Playwright 快速脚本或代码走查，报告注明方式）；grep 全仓 "KK 控制台" 零残留
 - [ ] **Step 5: Commit** `feat(frontend): real search in command palette; rebrand to Felix`
 
-### Task S3: 前端 —— 管理后台扩充
+### Task 3: 前端 —— 管理后台扩充
 
 **Files:** Create `frontend/src/components/admin/AdminNav.tsx`、`frontend/src/pages/admin/{AdminOverview,AdminSessions,AdminHabits,AdminProfile}.tsx`；Modify `frontend/src/App.tsx`、`frontend/src/context/AuthContext.tsx`、`frontend/src/pages/admin/{AdminPosts,AdminCategories,PostEditor}.tsx`
 
@@ -116,7 +116,7 @@ README.md / CLAUDE.md                文档（Task S4）
 - [ ] **Step 8: 验证**：tsc×2/build 零错误；8090 造数据走查四页数据流（curl 形状对照 + dev HTML 200）；清理；grep 确认三处既有 admin 页 AdminNav 挂载
 - [ ] **Step 9: Commit** `feat(frontend): admin expansion — overview, sessions, habits, profile`
 
-### Task S4: 数据（昵称 Felix）+ 文档 + 冒烟回归 + 收尾
+### Task 4: 数据（昵称 Felix）+ 文档 + 冒烟回归 + 收尾
 
 **Files:** Modify `README.md`、`CLAUDE.md`；DB 数据更新（非文件）
 
