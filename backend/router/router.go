@@ -32,7 +32,7 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client, qs *quote.Service
 	uh2 := handler.NewUploadHandler()
 	gh := handler.NewGalleryHandler()
 	cmth := handler.NewCommentHandler(cfg, db)
-	auth := middleware.AuthMiddleware(cfg.JWTSecret)
+	auth := middleware.SingleUserMiddleware()
 
 	// invest: quote.Service 单实例由 main.go 传入，asset/invest handler 共享
 	ah := handler.NewAssetHandler(db, qs, rdb)
@@ -58,9 +58,6 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client, qs *quote.Service
 	// public api
 	api := r.Group("/api")
 	{
-		// auth
-		api.POST("/auth/login", uh.Login)
-
 		// posts (public)
 		api.GET("/posts/archive", ph.Archive)
 		api.GET("/posts", ph.List)

@@ -23,7 +23,8 @@ func NewSearchHandler(db *sqlx.DB) *SearchHandler {
 // 不重扫替换产物，故 `\`→`\\` 在前、`%`/`_` 在后不会产生二次转义。
 var escapeLike = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
-// likeParam 先转义再包 %...%（MySQL LIKE 默认转义符为 \）。
+// likeParam 先转义再包 %...%。各查询 LIKE 均显式带 ESCAPE 子句（Go 源码写作
+// ESCAPE '\\\\'，SQL 层即 ESCAPE '\\'，转义符为 \），自证转义语义、不依赖默认值（防 sql_mode 漂移）。
 func likeParam(q string) string {
 	return "%" + escapeLike.Replace(q) + "%"
 }
@@ -77,7 +78,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 	// posts：仅已发布，summary 可空 → IFNULL 兜底
 	posts := []searchPost{}
 	if err := h.db.SelectContext(ctx, &posts,
-		"SELECT id, title, slug, IFNULL(summary,'') AS summary FROM posts WHERE status = 'published' AND (title LIKE ? OR summary LIKE ?) ORDER BY created_at DESC LIMIT 8",
+		"SELECT id, title, slug, IFNULL(summary,'') AS summary FROM posts WHERE status = 'published' AND (title LIKE ? ESCAPE '\\\\' OR summary LIKE ? ESCAPE '\\\\') ORDER BY created_at DESC LIMIT 8",
 		like, like); err != nil {
 		log.Printf("search: posts: %v", err)
 		posts = []searchPost{}
@@ -85,7 +86,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 
 	assets := []searchAsset{}
 	if err := h.db.SelectContext(ctx, &assets,
-		"SELECT id, symbol, name, type FROM assets WHERE symbol LIKE ? OR name LIKE ? ORDER BY created_at LIMIT 8",
+		"SELECT id, symbol, name, type FROM assets WHERE symbol LIKE ? ESCAPE '\\\\' OR name LIKE ? ESCAPE '\\\\' ORDER BY created_at LIMIT 8",
 		like, like); err != nil {
 		log.Printf("search: assets: %v", err)
 		assets = []searchAsset{}
@@ -94,7 +95,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 	// habits：仅未归档，icon 可空 → IFNULL 兜底
 	habits := []searchHabit{}
 	if err := h.db.SelectContext(ctx, &habits,
-		"SELECT id, name, IFNULL(icon,'') AS icon FROM habits WHERE archived = FALSE AND name LIKE ? ORDER BY created_at LIMIT 5",
+		"SELECT id, name, IFNULL(icon,'') AS icon FROM habits WHERE archived = FALSE AND name LIKE ? ESCAPE '\\\\' ORDER BY created_at LIMIT 5",
 		like); err != nil {
 		log.Printf("search: habits: %v", err)
 		habits = []searchHabit{}
@@ -102,7 +103,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 
 	categories := []searchCategory{}
 	if err := h.db.SelectContext(ctx, &categories,
-		"SELECT id, name, slug FROM categories WHERE name LIKE ? OR slug LIKE ? ORDER BY name LIMIT 5",
+		"SELECT id, name, slug FROM categories WHERE name LIKE ? ESCAPE '\\\\' OR slug LIKE ? ESCAPE '\\\\' ORDER BY name LIMIT 5",
 		like, like); err != nil {
 		log.Printf("search: categories: %v", err)
 		categories = []searchCategory{}
@@ -110,7 +111,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 
 	tags := []searchTag{}
 	if err := h.db.SelectContext(ctx, &tags,
-		"SELECT id, name FROM tags WHERE name LIKE ? ORDER BY name LIMIT 5",
+		"SELECT id, name FROM tags WHERE name LIKE ? ESCAPE '\\\\' ORDER BY name LIMIT 5",
 		like); err != nil {
 		log.Printf("search: tags: %v", err)
 		tags = []searchTag{}
