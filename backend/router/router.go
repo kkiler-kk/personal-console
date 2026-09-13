@@ -42,6 +42,9 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client, qs *quote.Service
 	// learn: profiles/sessions/stats/calendar（Task 3.3）
 	lh := handler.NewLearnHandler(db, rdb)
 
+	// search: 全站五类聚合（Task S1）
+	sh := handler.NewSearchHandler(db)
+
 	// habit: CRUD/打卡/热力图（Task 4.2）
 	hh := handler.NewHabitHandler(db, rdb)
 
@@ -127,10 +130,14 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client, qs *quote.Service
 		// learn: profiles / sessions / stats / calendar
 		protected.GET("/learn/profiles", lh.Profiles)
 		protected.PUT("/learn/profiles/:lang", lh.UpdateProfile)
+		protected.GET("/learn/sessions", lh.Sessions)
 		protected.POST("/learn/sessions", lh.CreateSession)
 		protected.DELETE("/learn/sessions/:id", lh.DeleteSession)
 		protected.GET("/learn/stats", lh.Stats)
 		protected.GET("/learn/calendar", lh.Calendar)
+
+		// search: 全站五类聚合（⌘K 命令面板，Task S1）
+		protected.GET("/search", sh.Search)
 
 		// habits: CRUD / 打卡 / 热力图（Task 4.2）
 		// 注：GET 树内 /habits/heatmap 为纯静态、与 :id 不同方法树，gin v1.10 实测无冲突

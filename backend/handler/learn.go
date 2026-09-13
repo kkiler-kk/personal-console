@@ -149,6 +149,46 @@ func (h *LearnHandler) UpdateProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "profile updated"})
 }
 
+// Sessions 返回学习记录列表（管理后台学习记录页数据源，Task S1）。
+// ?limit= 默认 100，clamp 1..200，非法值 400（同 Calendar 的 year 惯例）；
+// total 为全表 COUNT(*)（不受 limit 影响）。note 可空 → IFNULL 兜底
+// （同 profileColumns 惯例）；session_date/created_at NOT NULL/有默认值，直接选。
+func (h *LearnHandler) Sessions(c *gin.Context) {
+	limit := 100
+	if l := c.Query("limit"); l != "" {
+		parsed, err := strconv.Atoi(l)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+			return
+		}
+		limit = parsed
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	var total int
+	if err := h.db.GetContext(c.Request.Context(), &total,
+		"SELECT COUNT(*) FROM study_sessions"); err != nil {
+		log.Printf("learn: sessions count: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	sessions := []model.StudySession{}
+	if err := h.db.SelectContext(c.Request.Context(), &sessions,
+		"SELECT id, lang, activity, minutes, session_date, IFNULL(note,'') AS note, created_at FROM study_sessions ORDER BY session_date DESC, id DESC LIMIT ?",
+		limit); err != nil {
+		log.Printf("learn: sessions: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"sessions": sessions, "total": total})
+}
+
 // CreateSession 记录一次学习；date 缺省 = 今天（Go 本地），禁未来日期（task 4.5），
 // 成功后失效 dashboard 缓存。
 func (h *LearnHandler) CreateSession(c *gin.Context) {
