@@ -6,7 +6,7 @@
 
 | 板块     | 定位                                     | 进度                                   |
 | -------- | ---------------------------------------- | -------------------------------------- |
-| 📈 投资 | 美股/A 股个股、ETF、银行积存金的持仓与盈亏跟踪 | 已上线（阶段 2）                       |
+| 📈 投资 | 美股/A 股个股、ETF、场外中国基金、银行积存金的持仓与盈亏跟踪 | 已上线（阶段 2）                       |
 | 🗣️ 学习 | 英语/西班牙语学习阶段记录 + 每日打卡（简化版，不做生词本/SRS） | 已上线（阶段 3）                       |
 | 🌱 生活 | 习惯打卡热力图、随手记、照片墙            | 已上线（阶段 4，照片墙阶段 1 先行）    |
 | ✍️ 博客 | 文章/分类/标签/归档/评论系统              | 已完成（阶段 1）                       |
@@ -69,7 +69,7 @@ blogs/
 │   │   ├── jwt.go              # JWT 工具
 │   │   ├── portfolio/          # 持仓盈亏 + 价值曲线纯函数（含单测）
 │   │   ├── learn/              # 学习连续天数（streak）纯函数（含单测）
-│   │   └── quote/              # 行情子系统：Yahoo→Stooq→兜底三级降级（含单测）
+│   │   └── quote/              # 行情子系统：Yahoo→Stooq→天天基金(6位基金码)→兜底降级（含单测）
 │   ├── service/
 │   │   └── snapshot.go         # 每日价格快照 cron + 启动补跑（一年回填在建资产时异步触发）
 │   ├── router/
@@ -104,7 +104,7 @@ blogs/
         └── pages/
             ├── Dashboard.tsx   # 首页仪表盘（统计卡 + 收益曲线 + 习惯迷你热力图）
             ├── Login.tsx       # 登录
-            ├── invest/         # 投资页（持仓/交易/曲线/资产对话框）
+            ├── invest/         # 投资页（持仓表 + 类型筛选 Tab/交易/曲线/资产对话框：美股·A股·积存金·中国基金·手动预设）
             ├── learn/          # 学习页（阶段档案/记录学习/统计图表/打卡日历）
             ├── blog/           # 文章列表/详情/归档/分类/标签
             ├── admin/          # 文章管理/分类管理/编辑器
@@ -207,7 +207,7 @@ npm run dev
 | 方法   | 路径                              | 说明                                       |
 | ------ | --------------------------------- | ------------------------------------------ |
 | GET    | /api/assets                       | 资产列表                                   |
-| POST   | /api/assets                       | 创建资产（symbol/name/type/price_source/currency） |
+| POST   | /api/assets                       | 创建资产（symbol/name/type/price_source/currency；type ∈ stock/etf/metal/fund/other，price_source ∈ yahoo/computed_gold_cny/manual/fund_cn；`fund_cn` 要求 symbol 为纯 6 位数字，服务端强制 `type=fund`、`currency=CNY`） |
 | PUT    | /api/assets/:id                   | 更新资产名称                               |
 | DELETE | /api/assets/:id                   | 删除资产（有交易记录时 400）               |
 | PUT    | /api/assets/:id/price             | 手动更新现价（manual 资产）                |
@@ -215,7 +215,7 @@ npm run dev
 | POST   | /api/trades                       | 录入交易（超卖校验，超卖 400）             |
 | DELETE | /api/trades/:id                   | 删除交易                                   |
 | GET    | /api/positions                    | 持仓 + CNY 汇总（加权平均成本，实时推导；含 PE(TTM)） |
-| GET    | /api/quotes?symbols=A,B           | 批量行情（Yahoo→Stooq→本地兜底三级降级）   |
+| GET    | /api/quotes?symbols=A,B           | 批量行情（Yahoo→Stooq→天天基金(仅 6 位基金码)→本地兜底降级）   |
 | GET    | /api/price-history?symbol=&days=  | 单资产收盘价历史（days 默认 90，上限 365） |
 | GET    | /api/positions/history?days=      | 组合价值曲线（市值/成本/盈亏，CNY 计价）   |
 
@@ -354,13 +354,13 @@ created_at TIMESTAMP
 
 ### assets / trades / price_history 表（投资模块，阶段 2）
 ```sql
--- assets：资产（个股/ETF/银行积存金/手动资产）
+-- assets：资产（个股/ETF/场外中国基金/银行积存金/手动资产）
 id               BIGINT PK AUTO_INCREMENT
-symbol           VARCHAR(32) UNIQUE NOT NULL   -- 如 AAPL；积存金固定 GOLD_CNY_G
+symbol           VARCHAR(32) UNIQUE NOT NULL   -- 如 AAPL / 600519.SS；积存金固定 GOLD_CNY_G；中国基金为纯 6 位数字（如 110022）
 name             VARCHAR(100) NOT NULL
-type             VARCHAR(16)  -- stock / etf / metal / other
-price_source     VARCHAR(32)  -- yahoo / computed_gold_cny / manual
-currency         VARCHAR(8)   -- USD / CNY
+type             VARCHAR(16)  -- stock / etf / metal / fund / other
+price_source     VARCHAR(32)  -- yahoo / computed_gold_cny / manual / fund_cn
+currency         VARCHAR(8)   -- USD / CNY（fund_cn 强制 CNY）
 current_price    DECIMAL(18,4) (可空，行情兜底价)
 price_updated_at DATETIME (可空)
 created_at       TIMESTAMP
@@ -428,10 +428,11 @@ PRIMARY KEY (habit_id, log_date)
 ## 功能特性
 
 - **控制台 Dashboard**：统计卡（投资组合/今日学习分钟数/习惯/文章/评论/照片）+ 近 30 天收益曲线 + 习惯近 16 周迷你热力图
-- **投资组合**：资产/交易流水/加权平均成本持仓盈亏（CNY 汇总，美元资产按实时汇率折算）；银行积存金按 `GC=F ÷ 31.1035 × USDCNY` 换算克价
-- **行情三级降级**：Yahoo → Stooq → 本地兜底价（标记 stale），页面永不因行情失败而不可用；Redis 缓存 60 秒
-- **PE(TTM) 与 A 股**：持仓含 PE(TTM)（Yahoo 基本面，1h 缓存，失败恒 null 不阻塞）；支持 A 股（.SS/.SZ 后缀，CNY 计价）
-- **每日快照**：robfig/cron 每日 06:00（北京时间）快照自动跟踪资产（Yahoo/积存金）价格，启动时补跑漏掉的快照；创建自动跟踪资产时异步回填一年历史；收益曲线由快照收盘价 + 交易流水推导
+- **投资组合**：资产/交易流水/加权平均成本持仓盈亏（CNY 汇总，美元资产按实时汇率折算）；银行积存金按 `GC=F ÷ 31.1035 × USDCNY` 换算克价；持仓表支持按资产类型筛选（全部/股票/ETF/基金/黄金/其他，仅过滤持仓行，汇总卡与曲线保持全局口径）
+- **行情降级链**：Yahoo → Stooq → 天天基金（仅 6 位基金码）→ 本地兜底价（标记 stale），页面永不因行情失败而不可用；Redis 缓存 60 秒
+- **场外中国基金**：6 位纯数字基金代码（如 `110022`），净值源为天天基金/东方财富——盘中取估值 `GSZ`（官方净值作前收，日涨跌有语义）、收盘后取官方净值 `NAV`；历史净值走 `f10/lsjz`（需 Referer，单页 20 行分页拉取）；服务端强制 `type=fund`/`currency=CNY`，纳入每日快照与一年历史回填；Yahoo/Stooq 对裸 6 位码零成本跳过，不发无效外网请求
+- **PE(TTM) 与 A 股**：持仓含 PE(TTM)（Yahoo 基本面，1h 缓存，失败恒 null 不阻塞；manual/积存金/中国基金不请求 PE，基金无市盈率概念）；支持 A 股（.SS/.SZ 后缀，CNY 计价）
+- **每日快照**：robfig/cron 每日 06:00（北京时间）快照自动跟踪资产（Yahoo/积存金/中国基金）价格，启动时补跑漏掉的快照；创建自动跟踪资产时异步回填一年历史；收益曲线由快照收盘价 + 交易流水推导
 - **学习模块**：英语/西班牙语阶段档案（自评阶段/目标/备注，随时编辑）；按活动类型（背单词/听力/口语/阅读/语法/其他）记录学习时长；统计五件套（连续天数 streak/今日/本周/累计/分语言）+ 近 28 天柱状图 + 年度打卡日历；快速打卡（0 分钟记录标记「今天学过」）
 - **习惯打卡**：习惯 CRUD + 归档；年度打卡热力图（GitHub 风，仅渲染有记录的日期）；当日打卡状态由服务端驱动（列表行级 `checked_today` 字段，前端不做本地推导）；Dashboard 复用近 16 周 compact 热力缩略
 - **随手记**：生活页轻量输入框，复用博客 `posts` 表 + `notes` 种子分类（自动建、可跳转分类页查看更多）；种子分类被删时优雅降级为禁用 + 提示
@@ -464,7 +465,7 @@ PRIMARY KEY (habit_id, log_date)
 | REDIS_PASS   | (空)                | Redis 密码         |
 | JWT_SECRET   | change-me-in...     | JWT 密钥 (务必修改) |
 | PORT         | 8080                | 后端端口           |
-| QUOTE_PROXY  | http://127.0.0.1:7890 | 行情上游 HTTP 代理（Yahoo/Stooq/汇率）；未设置或置空时使用该默认值（quote 子系统内部支持空代理直连，但 `envOr` 会把空值替换为默认） |
+| QUOTE_PROXY  | http://127.0.0.1:7890 | 行情上游 HTTP 代理（Yahoo/Stooq/天天基金/汇率，全 provider 共用同一 client）；未设置或置空时使用该默认值（quote 子系统内部支持空代理直连，但 `envOr` 会把空值替换为默认） |
 
 ## 部署建议
 

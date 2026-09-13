@@ -1,6 +1,6 @@
 # 个人控制台网站重构设计
 
-日期：2026-09-12（修订：12 日学习模块简化废弃生词本/SRS、健身模块取消；13 日学习模块增补时长记录与统计）
+日期：2026-09-12（修订：12 日学习模块简化废弃生词本/SRS、健身模块取消；13 日学习模块增补时长记录与统计；13 日增补：中国基金支持）
 状态：已与用户对齐，阶段 1 已按此交付
 目标读者：本仓库的实施者（Claude / 用户本人）
 
@@ -12,7 +12,7 @@
 
 | 板块 | 定位 | 形态 |
 |---|---|---|
-| 📈 投资 | 美股个股、ETF（如 QQQ）、**A 股（沪 .SS / 深 .SZ，2026-09-13 增补）**、银行积存金（按克/人民币）的持仓与盈亏跟踪；持仓行显示 **PE(TTM)**（2026-09-13 增补） | 工具 |
+| 📈 投资 | 美股个股、ETF（如 QQQ）、**A 股（沪 .SS / 深 .SZ，2026-09-13 增补）**、**场外中国基金（6 位代码，天天基金净值源，2026-09-13 增补）**、银行积存金（按克/人民币）的持仓与盈亏跟踪；持仓行显示 **PE(TTM)**（2026-09-13 增补） | 工具 |
 | 🗣️ 学习 | 英语/西班牙语**学习阶段记录 + 学习时长记录与统计 + 打卡日历**（按类型记时长：背单词/听力/口语等；用户已有其他学习软件，不做生词本/SRS——2026-09-12/13 两次修订） | 轻工具 |
 | 🌱 生活 | 习惯打卡热力图、随手记、照片墙 | 工具 + 内容 |
 | ✍️ 博客 | 现有文章/分类/标签/归档/评论系统，保留并重做样式 | 内容 |
@@ -65,10 +65,10 @@ MySQL + Redis：docker-compose 本地启动（不变）
 -- 资产（个股/ETF/黄金等）
 CREATE TABLE assets (
   id          BIGINT PK AUTO_INCREMENT,
-  symbol      VARCHAR(32) UNIQUE NOT NULL,   -- AAPL / QQQ / GOLD_CNY_G
+  symbol      VARCHAR(32) UNIQUE NOT NULL,   -- AAPL / QQQ / GOLD_CNY_G / 110022（中国基金为纯 6 位数字）
   name        VARCHAR(100) NOT NULL,         -- 显示名，如"苹果""纳指ETF""银行积存金"
-  type        VARCHAR(16) NOT NULL,          -- stock / etf / metal / other（预留 crypto）
-  price_source VARCHAR(32) NOT NULL,         -- yahoo / computed_gold_cny / manual（勘误：原 16 装不下 computed_gold_cny）
+  type        VARCHAR(16) NOT NULL,          -- stock / etf / metal / fund / other（预留 crypto；2026-09-13 增补 fund）
+  price_source VARCHAR(32) NOT NULL,         -- yahoo / computed_gold_cny / manual / fund_cn（勘误：原 16 装不下 computed_gold_cny；2026-09-13 增补 fund_cn）
   currency    VARCHAR(8) NOT NULL DEFAULT 'USD', -- USD / CNY
   current_price DECIMAL(18,4),               -- 最近一次成功获取的价格
   price_updated_at DATETIME,
@@ -155,13 +155,19 @@ CREATE TABLE habit_logs (
 
 1. **首选 Yahoo Finance 行情**（无需 API key，v8 chart 接口）：个股、ETF、A 股（`600519.SS`/`000001.SZ`）、`GC=F`（COMEX 黄金期货 USD/oz；原计划的现货 `XAUUSD=X` 已被 Yahoo 下线，2026-09-12 实测 404）、`CNY=X`（美元兑人民币）。
 2. **降级 Stooq 免费 CSV**（`https://stooq.com/q/l/`）：Yahoo 限流或结构变化时兜底。
-3. **最终降级**：返回 `assets.current_price`（最近一次成功值）+ `price_updated_at`，前端灰显"更新于 X 分钟前"。页面永不因行情失败而白屏。
+3. **中国场外基金源：天天基金/东方财富**（2026-09-13 增补，`price_source=fund_cn`；链上位于 Stooq 之后、DB 兜底之前）：
+   - **实时/最新净值** `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo`（JSON，无需 key）：盘中 `GSZ`（估值）作 price、官方净值 `NAV` 作 previous_close（使日涨跌有语义）；收盘后/非交易日 `GSZ` 为 null → price 用 `NAV`。上游回显的 `FCODE` 必须与请求 symbol 一致，否则整条报价作废并降级（防上游/CDN 串数据把别的标的净值写进账本）；数值字段兼容「字符串/数字/null」与占位符 `--`，**NaN/Inf 显式按缺失处理**（否则会击穿 `json.Marshal` → gin 500）。
+   - **历史净值** `https://api.fund.eastmoney.com/f10/lsjz`：**必须带 `Referer: http://fundf10.eastmoney.com/`（缺失即 403）** 与浏览器 UA；上游按「新→旧」返回且**单页硬上限 20 行**（实测 pageSize=21..200 仍只回 20 行，≥365 直接回 `Data:null`），故按 `pageIndex` 翻页凑够 days（上限 20 页 = 400 点，覆盖 days≤365），输出反转为升序对齐 Yahoo 契约。
+   - **symbol 契约：纯 6 位数字**（`quote.IsFundCNSymbol`，全链唯一判定来源）。Yahoo 对裸 6 位码在**发请求前**即返回 `ErrUnsupported`（A 股带交易所后缀如 `600519.SS` 不匹配该正则，仍走 Yahoo），Stooq 的符号映射天然拒绝——基金码零无效外网往返；服务端对 `fund_cn` 强制 `type=fund`、`currency=CNY`，PE 恒 null（§4.4），创建后同样异步回填 365 天历史、并纳入每日快照（06:00 CST 时 D-1 官方净值已公布、D 日净值尚未产生，口径与股票一致）。
+   - **日频语义**：基金净值每日一次而非分钟级；盘中 `/api/quotes` 返回的是**估值**（非成交价），Redis 60s 缓存与整条降级链口径不变。
+   - ⚠️ **踩坑记录**：早期公开资料常见的 jsonp 估值源 `fundgz.1234567.com.cn/js/{code}.js` **已下线**（2026-09 实测返回 CDN 静态「页面未找到」页），**不要再用**；`FundMNFInfo` 字段语义与其一一对应（`NAV`≈`dwjz`、`GSZ`≈`gsz`、`PDATE`≈`jzrq`、`GZTIME`≈`gztime`），可直接替代。
+4. **最终降级**：返回 `assets.current_price`（最近一次成功值）+ `price_updated_at`，前端灰显"更新于 X 分钟前"。页面永不因行情失败而白屏。
 
 ### 4.2 刷新策略
 
 - 前端持仓页/Dashboard **每 60s 轮询** `GET /api/quotes?symbols=...`（页面不可见时暂停）。
 - 后端 Redis 缓存报价 60s，防止对上游限流。
-- **每日快照任务**（Go 内 robfig/cron）：每天北京时间 06:00（美股收盘后）把各资产价格写入 `price_history`（积存金参考价同日快照）；服务重启当日未快照则补跑。新资产创建时回填近一年历史（Yahoo chart API / Stooq 日线）。
+- **每日快照任务**（Go 内 robfig/cron）：每天北京时间 06:00（美股收盘后）把各资产价格写入 `price_history`（积存金参考价同日快照）；服务重启当日未快照则补跑。新资产创建时回填近一年历史（Yahoo chart API / Stooq 日线 / 天天基金 `lsjz` 分页，按 symbol 形态自动选源）。
 - 上游请求走 HTTP 代理，代理地址由 `.env` 的 `QUOTE_PROXY`（默认 `http://127.0.0.1:7890`）配置，可置空关闭。
 
 ### 4.3 银行积存金（人民币/克）
@@ -174,7 +180,7 @@ CREATE TABLE habit_logs (
 
 - **PE(TTM)** 来自 Yahoo v7 quote 接口（需 crumb：cookie → `GET /v1/test/getcrumb` → 带 crumb 调 v7；crumb 内存缓存，401 时重取一次）。批量 symbols 一次调用。
 - Redis 缓存 `fund:<symbol>` 1 小时（PE 无需分钟级新鲜度）。
-- **只降级不报错**：manual 资产与 GOLD_CNY_G 不请求（恒 null）；接口失败/字段缺失（多数 ETF 有 PE、期货无）→ null + log；持仓行 `pe_ttm` 字段 null 时前端显示 "—"。
+- **只降级不报错**：manual 资产、GOLD_CNY_G 与 `fund_cn` 基金不请求（恒 null——基金无市盈率概念，净值源也不提供 PE）；接口失败/字段缺失（多数 ETF 有 PE、期货无）→ null + log；持仓行 `pe_ttm` 字段 null 时前端显示 "—"。
 - `/api/positions` 的行结构**新增** `pe_ttm`（可 null）——遵守 schema 只增不改。
 
 ## 5. API 设计
@@ -236,7 +242,7 @@ frontend/src/
 │   └── charts/                   基于 Recharts 的封装（收益曲线、体重曲线、热力图）
 ├── pages/
 │   ├── Dashboard.tsx             /            4 统计卡 + 收益曲线 + 今日学习打卡入口 + 习惯热力缩略
-│   ├── invest/                   /invest      持仓表(含 PE(TTM) 列)·流水·录入对话框(美股/ETF/A股/积存金/手动)·收益曲线·占比条
+│   ├── invest/                   /invest      持仓表(含 PE(TTM) 列 + 类型筛选 Tab)·流水·录入对话框(美股/ETF/A股/积存金/中国基金/手动)·收益曲线·占比条
 │   ├── learn/                    /learn       语言阶段卡(可编辑)·一键打卡·打卡日历·连续天数
 │   ├── （fitness 已取消，导航与路由移除）
 │   ├── life/                     /life        习惯热力图·随手记·照片墙（复用 gallery API）
