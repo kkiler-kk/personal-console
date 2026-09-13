@@ -9,7 +9,7 @@ export type DisplayCurrency = "CNY" | "USD"
 
 /**
  * 币种符号（切换按钮/Dashboard 迷你前缀消费）。
- * CNY 与 formatMoney 的 zh-CN Intl 前缀一致（¥）；USD 两处前缀风格不同：Intl 出 "US$"、此处手拼 "$"，数值口径同源。
+ * CNY 与 formatMoney 的 zh-CN Intl 前缀一致（¥）；USD 金额经 formatMoney(en-US) 渲染为 $ 前缀，与此处手拼 "$" 一致，数值口径同源。
  */
 export const CURRENCY_SYMBOL: Record<DisplayCurrency, string> = { CNY: "¥", USD: "$" }
 
