@@ -1,5 +1,9 @@
 # 交付后 Backlog（按优先级）
 
+## 置顶：安全裁决（2026-09-13 迭代三新增）
+
+0. **公网部署前恢复认证** —— 2026-09-13 用户决定移除登录（`SingleUserMiddleware` 单用户直通），后端监听所有网卡且无认证：同网段设备可读写全部数据（含持仓/交易流水等财务数据）。`middleware/auth.go` git 历史有完整 JWT 版本，`pkg/jwt.go` 保留为基座；裁决清单见 spec §8（`docs/superpowers/specs/2026-09-12-personal-site-redesign-design.md`）。恢复认证后须先改 felix 种子用户密码（占位 bcrypt hash，不可登录）。在此之前仅本地/可信 LAN 使用，不做端口映射/内网穿透/公网反代。
+
 ## 首次迭代优先
 
 1. 照片墙删除按钮加 AlertDialog 确认 + `group-focus-within:opacity-100`（frontend/src/pages/life/GalleryLightbox.tsx:110，误触即删 + 键盘不可见）
@@ -37,3 +41,12 @@
 21. 用前导零基金（如 000001）跑一次真链验证 FCODE 回显与分页历史
 22. PE 排除可按 symbol 形态扩展（既有裸 6 位 yahoo 资产少打一次无效 v7）
 23. Radix Tabs → ToggleGroup a11y 语义（筛选器场景）
+
+## 迭代三遗留（2026-09-13 无认证/币种切换/拖拽排序，minor 延后）
+
+24. 持仓拖拽把手键盘重排不可达（T6 已补 `aria-label="拖拽排序把手"`；HTML5 原生 DnD 仅鼠标可拖，列排序为部分替代——桌面特性定位，如补键盘重排需换 Pointer Events/自定义方案）
+25. displayCurrency 的 fx 回落判定在 InvestPage/Dashboard 双份，可提取共享 `resolveDisplayCurrency`（附带：toggle 未 useCallback，零实际影响）
+26. fx 的 `?? 1` 兜底使「汇率缺失」与「1:1」不可分辨（positions summary 契约下不可达，卫生项）
+27. search.go:27 「防 sql_mode 漂移」注释措辞过强（sql_mode 漂移下 ESCAPE 同样失效，只是显式报错而非静默错义）
+28. asset.go Reorder 注释（~:257）防线分工失准——「数量比对」并不能拦截等长重复 ids，`seen` 集合才是重复的拦截者；router.go:112 注释两处小疵（gin≥1.5 静态段天然优先于参数段、注册先后无关；「见 task-3 报告」指针会悬空，应改为自含结论）
+29. model.go `Comment.CanDelete` 行 gofmt 对齐（HEAD 起既有问题，历次任务未越权修，留档可另起 chore）

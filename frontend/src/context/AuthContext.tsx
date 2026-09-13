@@ -26,7 +26,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  useEffect(() => { refresh() }, [])
+  useEffect(() => {
+    // migration（2026-09-13 去登录）：一次性清理旧 JWT 登录时代残留的 localStorage 键。
+    // 无认证单用户直通后这两个键不再被任何代码读写，留着仅为历史脏数据。
+    try {
+      localStorage.removeItem("token")
+      localStorage.removeItem("user")
+    } catch { /* 隐私模式等不可用场景：无残留可清，忽略 */ }
+    refresh()
+  }, [])
 
   return <Ctx.Provider value={{ user, refresh }}>{children}</Ctx.Provider>
 }

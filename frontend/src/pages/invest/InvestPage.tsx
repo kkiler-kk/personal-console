@@ -347,6 +347,7 @@ export default function InvestPage() {
                         <TableCell className="w-8 pr-0">
                           <span className={cn("flex items-center",
                             dragEnabled ? "cursor-grab text-muted-foreground" : "cursor-not-allowed text-muted-foreground/30")}
+                            aria-label="拖拽排序把手"
                             title={dragEnabled ? "拖拽调整顺序" : "切换回『全部』且取消列排序后可拖拽"}>
                             <GripVertical className="size-4" />
                           </span>

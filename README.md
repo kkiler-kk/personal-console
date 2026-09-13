@@ -1,6 +1,6 @@
 # Felix 的个人控制台
 
-Felix 的个人控制台网站（原「个人博客系统」演进而来）：单用户，以工具为主、文章次要。前端使用 React（TypeScript），后端使用 Go，数据库使用 MySQL，缓存使用 Redis。全站四大板块（投资/学习/生活/博客）已全部交付：博客功能（文章/分类/标签/归档/评论/照片墙）自旧站等价迁移，投资/学习/生活模块按阶段 2/3/4 依次上线；2026-09-13 迭代新增 ⌘K 全站搜索与管理后台扩充（总览/学习记录/习惯/资料）。
+Felix 的个人控制台网站（原「个人博客系统」演进而来）：单用户，以工具为主、文章次要。前端使用 React（TypeScript），后端使用 Go，数据库使用 MySQL，缓存使用 Redis。全站四大板块（投资/学习/生活/博客）已全部交付：博客功能（文章/分类/标签/归档/评论/照片墙）自旧站等价迁移，投资/学习/生活模块按阶段 2/3/4 依次上线；2026-09-13 迭代新增 ⌘K 全站搜索与管理后台扩充（总览/学习记录/习惯/资料）；13 日第二迭代移除登录（**无认证单用户直通**，打开即用）、新增持仓拖拽排序与列排序、总资产 ¥/$ 币种切换（见「安全注意」）。
 
 ## 板块
 
@@ -29,8 +29,7 @@ Felix 的个人控制台网站（原「个人博客系统」演进而来）：�
 | 数据库   | MySQL 8.0                | 数据持久化                 |
 | ORM      | sqlx                     | 轻量级 SQL 操作            |
 | 缓存     | Redis 7                  | 列表/分类/标签缓存         |
-| 认证     | JWT (golang-jwt)         | 无状态认证（注册接口已下线，单用户） |
-| 密码     | bcrypt                   | 密码加密                   |
+| 认证     | 无（单用户直通）       | SingleUserMiddleware 注入 users.id=1；JWT 登录已于 2026-09-13 移除，`pkg/jwt.go` 保留为恢复认证基座（见「安全注意」） |
 
 ## 项目结构
 
@@ -49,7 +48,7 @@ blogs/
 │   │   ├── db.go               # MySQL 连接
 │   │   └── redis.go            # Redis 连接
 │   ├── handler/
-│   │   ├── user.go             # 登录/资料
+│   │   ├── user.go             # 用户资料（登录已移除）
 │   │   ├── post.go             # 文章 CRUD + 归档
 │   │   ├── category.go         # 分类 + 标签
 │   │   ├── comment.go          # 评论（嵌套回复 + 点赞）
@@ -63,11 +62,11 @@ blogs/
 │   │   ├── habit.go            # 习惯 CRUD + 打卡/撤销 + 年度热力图
 │   │   └── search.go           # 全站五类聚合搜索（⌘K 命令面板数据源）
 │   ├── middleware/
-│   │   └── auth.go             # JWT 认证中间件
+│   │   └── auth.go             # SingleUserMiddleware 单用户直通（JWT 版本在 git 历史）
 │   ├── model/
 │   │   └── model.go            # 数据模型
 │   ├── pkg/
-│   │   ├── jwt.go              # JWT 工具
+│   │   ├── jwt.go              # JWT 工具（2026-09-13 起未消费，保留为恢复认证基座）
 │   │   ├── portfolio/          # 持仓盈亏 + 价值曲线纯函数（含单测）
 │   │   ├── learn/              # 学习连续天数（streak）纯函数（含单测）
 │   │   └── quote/              # 行情子系统：Yahoo→Stooq→天天基金(6位基金码)→兜底降级（含单测）
@@ -96,17 +95,18 @@ blogs/
         │   ├── blog/           # 文章卡片/评论区/Markdown/分页
         │   └── ErrorState.tsx  # 全站统一错误态（图标 + 文案 + 可选重试）
         ├── context/
-        │   ├── AuthContext.tsx # 认证状态
+        │   ├── AuthContext.tsx # 用户状态（单用户无登录：mount 拉 profile，契约 {user, refresh}）
         │   └── ThemeContext.tsx # 深浅色主题
         ├── lib/
-        │   ├── api.ts          # fetch 封装（token 注入 + 401 处理）
+        │   ├── api.ts          # fetch 封装（无认证：无 token 注入/401 分支）
         │   ├── types.ts        # 共享类型
         │   ├── format.ts       # 格式化工具
+        │   ├── displayCurrency.ts # 汇总层 ¥/$ 显示币种（localStorage 持久 + 跨标签同步）
+        │   ├── mask.ts         # 投资金额遮蔽开关（防窥隐私，非安全边界）
         │   └── dates.ts        # 日期工具（compact 热力图 16 周窗口起点，Dashboard/热力图共享）
         └── pages/
             ├── Dashboard.tsx   # 首页仪表盘（统计卡 + 收益曲线 + 习惯迷你热力图）
-            ├── Login.tsx       # 登录
-            ├── invest/         # 投资页（持仓表 + 类型筛选 Tab/交易/曲线/资产对话框：美股·A股·积存金·中国基金·手动预设）
+            ├── invest/         # 投资页（持仓表[拖拽排序 + 列头三态排序] + 类型筛选 Tab + ¥/$ 切换/交易/曲线/资产对话框：美股·A股·积存金·中国基金·手动预设）
             ├── learn/          # 学习页（阶段档案/记录学习/统计图表/打卡日历）
             ├── blog/           # 文章列表/详情/归档/分类/标签
             ├── admin/          # 管理后台：总览/文章/分类/学习记录/习惯/资料 + 编辑器
@@ -162,19 +162,20 @@ npm install
 npm run dev
 ```
 
-前端会在 `http://localhost:3000` 启动，API 请求会自动代理到后端。
+前端会在 `http://localhost:3000` 启动，API 请求会自动代理到后端。打开 `http://localhost:3000` **即用，无需登录**——单用户直通，后端建表时自动种子 `felix` 用户（id=1），所有请求都视为该用户。
 
 ### 4. 冒烟测试（可选）
 
-全栈跑起来后执行：`SMOKE_USER=<用户名> SMOKE_PASS=<密码> node frontend/scripts/smoke.mjs`，十步链路（含评论发→删、投资链路：建资产→录交易→持仓校验→清理、学习链路：记录时长→统计校验→/learn 页面→清理、习惯链路：建习惯→打卡→热力图含今天→/life 页面→清理）全过输出 `STEP8 INVEST PASS` + `STEP9 LEARN PASS` + `STEP10 HABIT PASS` + `SMOKE PASS ✅`。
+全栈跑起来后执行：`node frontend/scripts/smoke.mjs`（**无需任何凭据环境变量**；`BASE_URL` 可覆盖前端地址，默认 `http://localhost:3000`），十步链路（直达 Dashboard → 博客 → 管理后台 → 管理总览 → 全站搜索 → 生活页 → 评论发删、投资链路：建资产→录交易→持仓校验→清理、学习链路：记录时长→统计校验→/learn 页面→清理、习惯链路：建习惯→打卡→热力图含今天→/life 页面→清理）全过输出 `STEP5 SEARCH PASS` + `STEP8 INVEST PASS` + `STEP9 LEARN PASS` + `STEP10 HABIT PASS` + `SMOKE PASS ✅`。
 
 ## API 文档
+
+> 2026-09-13 起全站**无认证**：所有接口都不需要 token（后端 SingleUserMiddleware 把每个请求视为用户 felix/id=1）。下方分组为历史沿用划分。
 
 ### 公开接口
 
 | 方法   | 路径                          | 说明             |
 | ------ | ----------------------------- | ---------------- |
-| POST   | /api/auth/login               | 用户登录         |
 | GET    | /api/posts                    | 文章列表         |
 | GET    | /api/posts/:slug              | 文章详情         |
 | GET    | /api/posts/archive            | 归档列表         |
@@ -186,7 +187,7 @@ npm run dev
 | POST   | /api/comments/:id/like        | 点赞/取消点赞    |
 | DELETE | /api/comments/:id             | 删除评论         |
 
-### 需认证接口 (Bearer Token)
+### 管理/数据接口
 
 | 方法   | 路径                       | 说明               |
 | ------ | -------------------------- | ------------------ |
@@ -205,13 +206,14 @@ npm run dev
 | GET    | /api/dashboard/summary     | 控制台统计摘要（含 learn_streak/review_due/study_minutes_today 学习字段与 habits_checked_today/habits_total 习惯字段） |
 | GET    | /api/search?q=             | 全站搜索（文章/资产/习惯/分类/标签五类聚合；q 按 rune 计 1–50，越界 400；响应五键恒在，空为 []） |
 
-### 投资接口（需认证 Bearer Token）
+### 投资接口
 
 | 方法   | 路径                              | 说明                                       |
 | ------ | --------------------------------- | ------------------------------------------ |
 | GET    | /api/assets                       | 资产列表                                   |
 | POST   | /api/assets                       | 创建资产（symbol/name/type/price_source/currency；type ∈ stock/etf/metal/fund/other，price_source ∈ yahoo/computed_gold_cny/manual/fund_cn；`fund_cn` 要求 symbol 为纯 6 位数字，服务端强制 `type=fund`、`currency=CNY`） |
 | PUT    | /api/assets/:id                   | 更新资产名称                               |
+| PUT    | /api/assets/reorder               | 拖拽排序持久化（body `{ids:[...]}`；ids 须与全部现存资产 id 集合严格一致——缺一/多一/重复均 400；事务内逐位写 sort_order=1..N） |
 | DELETE | /api/assets/:id                   | 删除资产（有交易记录时 400）               |
 | PUT    | /api/assets/:id/price             | 手动更新现价（manual 资产）                |
 | GET    | /api/trades?asset_id=             | 交易流水（含资产联表，traded_at 倒序，上限 200） |
@@ -222,7 +224,7 @@ npm run dev
 | GET    | /api/price-history?symbol=&days=  | 单资产收盘价历史（days 默认 90，上限 365） |
 | GET    | /api/positions/history?days=      | 组合价值曲线（市值/成本/盈亏，CNY 计价）   |
 
-### 学习接口（需认证 Bearer Token）
+### 学习接口
 
 | 方法   | 路径                          | 说明                                             |
 | ------ | ----------------------------- | ------------------------------------------------ |
@@ -234,7 +236,7 @@ npm run dev
 | GET    | /api/learn/stats              | 统计（streak/今日/本周/累计/分语言/近 28 天逐日）   |
 | GET    | /api/learn/calendar?year=     | 年度打卡日历（仅返回有记录的日期；year 默认当年）   |
 
-### 生活接口（需认证 Bearer Token）
+### 生活接口
 
 | 方法   | 路径                          | 说明                                             |
 | ------ | ----------------------------- | ------------------------------------------------ |
@@ -250,18 +252,10 @@ npm run dev
 
 ### 请求示例
 
-**登录**
-```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"123456"}'
-```
-
 **创建文章**
 ```bash
 curl -X POST http://localhost:8080/api/posts \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
     "title":"Hello World",
     "summary":"我的第一篇博客",
@@ -435,6 +429,8 @@ PRIMARY KEY (habit_id, log_date)
 - **⌘K 全站搜索**：命令面板（⌘K/Ctrl+K）服务端聚合搜索文章/资产/习惯/分类/标签五类 + 导航快速跳转；q 限 1–50 字符，输入 250ms 防抖
 - **管理后台**：顶部 AdminNav 横向导航串起总览（六路统计卡聚合）/文章/分类/学习记录（逐条删除）/习惯（含归档切换）/资料（昵称/头像/简介）六页
 - **投资组合**：资产/交易流水/加权平均成本持仓盈亏（CNY 汇总，美元资产按实时汇率折算）；银行积存金按 `GC=F ÷ 31.1035 × USDCNY` 换算克价；持仓表支持按资产类型筛选（全部/股票/ETF/基金/黄金/其他，仅过滤持仓行，汇总卡与曲线保持全局口径）
+- **持仓拖拽排序 + 列排序**：自定义顺序持久化到 `assets.sort_order`（HTML5 原生拖拽，乐观更新失败自动回滚；仅「全部」筛选且未列排序时可拖）；7 个数值列列头三态排序（不排序→降序→升序，null 恒沉底、并列保持自定义序）
+- **总资产 ¥/$ 币种切换**：投资页总资产/总盈亏/今日盈亏三卡一键切换人民币/美元显示（按后端汇总同一汇率折算，localStorage 持久 + 跨标签同步），Dashboard 投资组合卡自动跟随；汇率不可用时禁用切换并强制回落 ¥；持仓表行级保持资产原币不动
 - **行情降级链**：Yahoo → Stooq → 天天基金（仅 6 位基金码）→ 本地兜底价（标记 stale），页面永不因行情失败而不可用；Redis 缓存 60 秒
 - **场外中国基金**：6 位纯数字基金代码（如 `110022`），净值源为天天基金/东方财富——盘中取估值 `GSZ`（官方净值作前收，日涨跌有语义）、收盘后取官方净值 `NAV`；历史净值走 `f10/lsjz`（需 Referer，单页 20 行分页拉取）；服务端强制 `type=fund`/`currency=CNY`，纳入每日快照与一年历史回填；Yahoo/Stooq 对裸 6 位码零成本跳过，不发无效外网请求
 - **PE(TTM) 与 A 股**：持仓含 PE(TTM)（Yahoo 基本面，1h 缓存，失败恒 null 不阻塞；manual/积存金/中国基金不请求 PE，基金无市盈率概念）；支持 A 股（.SS/.SZ 后缀，CNY 计价）
@@ -446,13 +442,13 @@ PRIMARY KEY (habit_id, log_date)
 - **分类系统**：文章可按分类浏览，分类带 `section` 字段归属板块（白名单 invest/learn/fitness/life/blog，越界值回退 blog；fitness 为已取消健身板块的遗留枚举值，仍可作普通博客分类使用）
 - **标签系统**：文章可打多个标签，支持按标签筛选
 - **时间归档**：按年月分组展示文章归档
-- **评论系统**：嵌套回复 + 点赞；评论凭邮箱识别，评论者可删除自己的评论，管理员登录后亦可删除
+- **评论系统**：嵌套回复 + 点赞；评论凭邮箱识别，评论者可删除自己的评论；单用户直通下 `can_delete` 恒真（站内可删任意评论，属无认证预期语义）
 - **照片墙**：生活页图库（灯箱放大浏览 + 键盘导航），管理端上传/删除
 - **浏览量统计**：每次访问文章自动增加浏览量
 - **Redis 缓存**：文章列表、分类、标签数据缓存 5-30 分钟
-- **JWT 认证**：登录签发 Token，有效期 72 小时（注册已下线，单用户）
+- **无登录直入**：单用户本地部署，打开即用（2026-09-13 移除登录/注册，后端 SingleUserMiddleware 将所有请求视为 felix/id=1；公网部署前必须恢复认证，见「安全注意」）
 - **深浅色主题**：仪表盘风 UI，支持明暗切换；移动端底部 Tab 导航
-- **冒烟测试**：Playwright 脚本十步链路：登录 → Dashboard → 博客 → 管理后台 → 生活页 → 评论发删 → 投资链路（建资产/录交易/持仓校验/清理）→ 学习链路（记录时长/统计校验/页面断言/清理）→ 习惯链路（建习惯/打卡/热力图含今天/页面断言/清理）
+- **冒烟测试**：Playwright 脚本十步链路（无需凭据）：直达 Dashboard（无登录）→ 博客 → 管理后台 → 管理总览 → 全站搜索 → 生活页 → 评论发删 → 投资链路（建资产/录交易/持仓校验/清理）→ 学习链路（记录时长/统计校验/页面断言/清理）→ 习惯链路（建习惯/打卡/热力图含今天/页面断言/清理）
 
 ## 环境变量配置
 
@@ -469,7 +465,7 @@ PRIMARY KEY (habit_id, log_date)
 | DB_NAME      | blog                | 数据库名           |
 | REDIS_ADDR   | 127.0.0.1:6379      | Redis 地址         |
 | REDIS_PASS   | (空)                | Redis 密码         |
-| JWT_SECRET   | change-me-in...     | JWT 密钥 (务必修改) |
+| JWT_SECRET   | change-me-in...     | JWT 密钥（当前无认证未消费，仅 pkg/jwt.go 恢复认证时使用；届时务必修改） |
 | PORT         | 8080                | 后端端口           |
 | QUOTE_PROXY  | http://127.0.0.1:7890 | 行情上游 HTTP 代理（Yahoo/Stooq/天天基金/汇率，全 provider 共用同一 client）；未设置或置空时使用该默认值（quote 子系统内部支持空代理直连，但 `envOr` 会把空值替换为默认） |
 
@@ -514,8 +510,16 @@ server {
 
 ## 注意事项
 
-1. **单用户系统**：注册接口已下线，账号直接在数据库中创建；第一个用户即为管理员
-2. **JWT_SECRET**：生产环境务必修改为长随机字符串
+1. **单用户系统（无认证）**：登录/注册接口均已移除（2026-09-13），后端将所有请求视为首个用户（felix，id=1，建表时自动种子，密码为不可登录的占位 bcrypt hash）；第一个用户即为管理员
+2. **JWT_SECRET**：当前无认证未消费；恢复认证时（见「安全注意」）务必改为长随机字符串
 3. **MySQL 字符集**：确保使用 utf8mb4 以支持 emoji 等特殊字符
 4. **Redis 缓存**：文章更新/删除时会自动清除相关缓存
 5. **UI 语言**：前端仅提供中文界面（无 i18n）
+
+## 安全注意
+
+- **本站当前无任何认证**（2026-09-13 用户决定：单用户本地部署，`SingleUserMiddleware` 对所有请求直通注入 `users.id=1`）。
+- **LAN 暴露面**：后端监听所有网卡（`*:8080`），无认证、无 IP 白名单——**同网段任何设备可直接读写全部数据（含持仓/交易流水等财务数据）**，并可删改文章/学习记录/习惯。
+- **缓解**：仅在本地或完全可信的局域网使用；不做端口映射、内网穿透或公网反代。
+- **公网/上云部署前必须恢复认证**：`pkg/jwt.go` 保留为基座，`middleware/auth.go` 的 git 历史有完整 JWT 实现（恢复路径见 `BACKLOG.md` 置顶项与 spec §8 裁决清单）；felix 种子密码为占位 hash，恢复认证后须先改密。
+- 前端金额遮蔽（`lib/mask.ts`）是**防窥隐私而非安全边界**——只隐藏页面数字，API 仍明文返回全量数据。

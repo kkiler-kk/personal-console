@@ -1,6 +1,6 @@
 # 个人控制台网站重构设计
 
-日期：2026-09-12（修订：12 日学习模块简化废弃生词本/SRS、健身模块取消；13 日学习模块增补时长记录与统计；13 日增补：中国基金支持）
+日期：2026-09-12（修订：12 日学习模块简化废弃生词本/SRS、健身模块取消；13 日学习模块增补时长记录与统计；13 日增补：中国基金支持；13 日：移除登录（单用户直通）、持仓排序、币种切换）
 状态：已与用户对齐，阶段 1 已按此交付
 目标读者：本仓库的实施者（Claude / 用户本人）
 
@@ -37,7 +37,7 @@
 │ React Router v6 · TanStack Query（服务端状态）      │
 │ Recharts（图表）· sonner（toast）                   │
 └──────────────────┬─────────────────────────────────┘
-                   │ /api（JWT Bearer，全部接口需登录）
+                   │ /api（无认证：SingleUserMiddleware 直通，2026-09-13）
 ┌─ 后端 backend/（保留骨架，扩展模块）───────────────┐
 │ Go 1.22 + Gin · sqlx · MySQL 8 · Redis 7           │
 │ 保留: config/ middleware/ pkg/jwt handler(post,    │
@@ -53,7 +53,7 @@ MySQL + Redis：docker-compose 本地启动（不变）
 原则：
 
 - 后端沿用现有分层（handler → sqlx 直查 → Redis 缓存，mutation 后失效缓存），新模块照抄现有 `post.go`/`category.go` 的模式。
-- 单用户站点：**移除注册页**，保留 JWT 登录（防止局域网内他人访问财务数据）。`users` 表及"第一个用户是管理员"机制不变。
+- 单用户站点：**无认证单用户直通**（2026-09-13 用户决定）：登录/注册全部移除，`SingleUserMiddleware` 对每个请求注入 `users.id=1`；**公网部署前必须恢复 JWT 认证**（`pkg/jwt.go` 保留为基座，`middleware/auth.go` 的 git 历史有完整 JWT 实现，裁决清单见 §8）。`users` 表及"第一个用户是管理员"机制不变（felix 用户 id=1 由 migrate 幂等种子）。
 - 前端选择 TypeScript：重写是引入类型安全的最佳时机，配合 shadcn/ui 生态默认实践。
 - 前端 v1 **仅中文界面**（用户为中文母语）；组件文案集中管理，预留 i18n 恢复的可能。现有 `i18n/`、`MatrixRain`、`TerminalOverlay` 等移除；`CommandPalette`（⌘K）以 shadcn 风格重做保留。
 
@@ -72,7 +72,9 @@ CREATE TABLE assets (
   currency    VARCHAR(8) NOT NULL DEFAULT 'USD', -- USD / CNY
   current_price DECIMAL(18,4),               -- 最近一次成功获取的价格
   price_updated_at DATETIME,
-  created_at  TIMESTAMP, updated_at TIMESTAMP
+  created_at  TIMESTAMP, updated_at TIMESTAMP,
+  sort_order  INT NOT NULL DEFAULT 0         -- 自定义展示顺序（2026-09-13 增补，ALTER 追加于表尾；拖拽排序持久化，
+                                             -- List/positions ORDER BY sort_order，legacy 行迁移时归一为 id）
 );
 
 -- 交易流水（永远按用户实际成交价记录，与行情解耦）
@@ -185,10 +187,10 @@ CREATE TABLE habit_logs (
 
 ## 5. API 设计
 
-沿用现有风格：JSON、`/api` 前缀、JWT Bearer（除 login 外全部需认证）、错误统一 `{"error": "..."}` + 恰当状态码。
+沿用现有风格：JSON、`/api` 前缀、错误统一 `{"error": "..."}` + 恰当状态码。**无认证**（2026-09-13）：原"需认证"分组现为 SingleUserMiddleware 直通，全部接口不要求 token。
 
 ```
-认证        POST /api/auth/login                    （保留；register 下线）
+认证        ——已移除（2026-09-13 用户决定，无认证单用户直通，见 §2 原则与 §8 安全裁决）
 
 Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏、今日学习分钟数与打卡状态、
                                                     学习连续天数、习惯打卡状态、收益曲线缩略数据
@@ -198,6 +200,8 @@ Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏
 
 投资        GET/POST        /api/assets             资产列表/新增
             PUT/DELETE      /api/assets/:id
+            PUT             /api/assets/reorder     {ids:[...]} 拖拽排序持久化（2026-09-13 增补；ids 须与全部
+                                                    现存资产 id 集合严格一致否则 400；事务内逐位写 sort_order=1..N）
             GET/POST        /api/trades             交易流水（支持 ?symbol= 过滤）
             DELETE          /api/trades/:id
             GET             /api/positions          推导持仓+盈亏（含每资产与汇总）
@@ -207,6 +211,8 @@ Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏
 学习        GET             /api/learn/profiles      两种语言的阶段档案（仅返回已有行，前端补空卡）
             PUT             /api/learn/profiles/:lang 更新阶段/目标/备注（upsert）
             POST            /api/learn/sessions      {lang, activity, minutes, date?, note?} 记录一次学习
+            GET             /api/learn/sessions?limit= 学习记录列表（session_date 倒序；limit 默认 100、
+                                                    clamp 1–200，非数字 400；返回 sessions + 全量 total）
             DELETE          /api/learn/sessions/:id  删除一条记录
             GET             /api/learn/stats         streak/今日(总分钟+分语言+分类型)/本周/累计/近28天逐日
             GET             /api/learn/calendar?year= 打卡日历（逐日分钟数+语言集合）
@@ -217,6 +223,10 @@ Dashboard   GET  /api/dashboard/summary             聚合：总市值/总盈亏
             PUT/DELETE      /api/habits/:id
             POST/DELETE     /api/habits/:id/check   {date}（打卡/撤销，幂等）
             GET             /api/habits/heatmap?year=
+
+搜索        GET             /api/search?q=          ⌘K 全站搜索：文章(仅已发布)/资产/习惯(未归档)/分类/标签
+                                                    五类聚合；q 按 rune 计 1–50（越界 400）；LIKE 通配符转义；
+                                                    各类独立失败降级为 []，响应五键恒在
 
 博客/图库/评论  现有接口全部保留不动
 ```
@@ -242,14 +252,14 @@ frontend/src/
 │   └── charts/                   基于 Recharts 的封装（收益曲线、体重曲线、热力图）
 ├── pages/
 │   ├── Dashboard.tsx             /            4 统计卡 + 收益曲线 + 今日学习打卡入口 + 习惯热力缩略
-│   ├── invest/                   /invest      持仓表(含 PE(TTM) 列 + 类型筛选 Tab)·流水·录入对话框(美股/ETF/A股/积存金/中国基金/手动)·收益曲线·占比条
+│   ├── invest/                   /invest      持仓表(含 PE(TTM) 列 + 类型筛选 Tab + 拖拽排序[sort_order 持久化自定义序] + 列头三态排序)·流水·录入对话框(美股/ETF/A股/积存金/中国基金/手动)·收益曲线·占比条·总资产 ¥/$ 币种切换(2026-09-13 增补，Dashboard 组合卡跟随)
 │   ├── learn/                    /learn       语言阶段卡(可编辑)·一键打卡·打卡日历·连续天数
 │   ├── （fitness 已取消，导航与路由移除）
 │   ├── life/                     /life        习惯热力图·随手记·照片墙（复用 gallery API）
 │   ├── blog/                     /blog /blog/:slug /archive 文章列表/详情/归档+评论
-│   ├── Login.tsx
+│   ├── （Login.tsx 已移除——2026-09-13 无认证单用户直通）
 │   └── admin/                    /admin       写文章（Markdown）+ 各模块数据管理
-├── lib/api.ts                    fetch 封装（JWT 注入、401 跳登录）
+├── lib/api.ts                    fetch 封装（无 token 注入/401 分支——2026-09-13 去认证）
 └── hooks/                        usePositions 等 TanStack Query hooks
 ```
 
@@ -260,11 +270,15 @@ frontend/src/
 - 圆角 12px、细边框 `#E5E7EB`、阴影仅一级（`0 1px 3px rgba(0,0,0,.06)`）。
 - 全部数据卡片骨架屏加载（TanStack Query loading 态），空状态给插画+引导按钮。
 
-## 8. 错误处理与数据安全
+## 8. 错误处理与数据安全（2026-09-13 修订：无认证现实）
 
+> **上云前置裁决（置顶）**：本站当前**无任何认证**。公网或任何不可信网络部署**之前**，必须恢复 JWT 认证——`pkg/jwt.go` 保留为基座，`middleware/auth.go` 的 git 历史有完整 JWT 实现（恢复路径见 BACKLOG.md 置顶项）；felix 种子用户密码为占位 bcrypt hash（不可登录），恢复认证后须先改密。
+
+- **LAN 暴露面（明示）**：后端监听所有网卡（`*:8080`），无认证、无 IP 白名单——**同网段任何设备可直接读写全部数据（含持仓/交易流水等财务数据）**，并可删改文章/学习记录/习惯。前端 dev server 代理同样暴露 `/api`。
+- **缓解（当前裁决）**：仅在本地或完全可信的局域网使用；不做端口映射/内网穿透/公网反代；本迭代不补认证（2026-09-13 用户决定，见 §2 原则）。
 - 后端：handler 统一错误返回；行情子系统错误只降级不抛出；所有 mutation 后失效对应 Redis 缓存（沿用现有模式）。
-- 前端：TanStack Query 全局 `onError` → sonner toast；401 → 跳登录页；表单 zod 校验。
-- 安全：仓库**必须私有**（财务数据）；`.env`、`backend/uploads` 已 gitignore；行情代理地址不含密钥。
+- 前端：TanStack Query 全局 `onError` → sonner toast；表单 zod 校验。（原"401 → 跳登录页"随 2026-09-13 去认证移除，api.ts 已无 token/401 分支。）
+- 安全：仓库**必须私有**（财务数据）；`.env`、`backend/uploads` 已 gitignore；行情代理地址不含密钥。金额遮蔽开关（`lib/mask.ts`）是**防窥隐私而非安全边界**——只隐藏 DOM 数字，API 仍明文返回全量数据。
 - 备份：`mysqldump` 每日快照到本地 `backups/`（gitignore），Makefile 提供 `make backup`。
 
 ## 9. 测试策略
@@ -274,7 +288,7 @@ frontend/src/
   - 学习打卡 streak 连续天数计算（修订：替代原 SM-2 算法测试）
   - 积存金换算
 - **前端**：`tsc --noEmit` + `npm run build` 零错误。
-- **冒烟测试**（webapp-testing skill / Playwright）：登录 → 建资产录交易 → 持仓盈亏正确显示 → 记录学习时长 → 统计出现 → 习惯打卡出现在热力图。
+- **冒烟测试**（webapp-testing skill / Playwright）：直达 Dashboard（无登录，2026-09-13 起）→ 建资产录交易 → 持仓盈亏正确显示 → 记录学习时长 → 统计出现 → 习惯打卡出现在热力图。
 - 每期收尾手动过一遍该期页面（桌面 + 移动视口）。
 
 ## 10. GitHub 上线准备（阶段 0）
@@ -299,7 +313,7 @@ frontend/src/
 
 ## 12. 明确不做（YAGNI）
 
-- 多用户/注册/权限体系（单用户，仅 JWT 登录）
+- 多用户/注册/权限体系（单用户；无认证直通——JWT 登录已于 2026-09-13 移除，公网部署前必须恢复，见 §8）
 - WebSocket 毫秒级行情、日内交易功能
 - 券商/银行接口自动同步（手动录入成交）
 - 加密货币行情（`type=other` 预留字段即可）
