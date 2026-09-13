@@ -4,6 +4,7 @@ import { Link } from "react-router-dom"
 import { TrendingUp, Languages, Sprout, PenLine, MessageSquare, Image, Eye, EyeOff } from "lucide-react"
 import { api } from "@/lib/api"
 import { compactWindowStart } from "@/lib/dates"
+import { formatDuration } from "@/lib/duration"
 import { MASK, maskValue, useInvestMask } from "@/lib/mask"
 import { StatCard } from "@/components/StatCard"
 import { ValueChart } from "@/components/charts/ValueChart"
@@ -90,7 +91,7 @@ export default function Dashboard() {
                 </Button>
               } />
             <StatCard title="今日学习"
-              value={data.study_minutes_today ? `${data.study_minutes_today} 分钟` : "—"}
+              value={data.study_minutes_today ? formatDuration(data.study_minutes_today) : "—"}
               sub={data.learn_streak > 0 ? `连续 ${data.learn_streak} 天` : "今天还没学习"}
               icon={Languages} href="/learn" />
             <StatCard title="习惯打卡"

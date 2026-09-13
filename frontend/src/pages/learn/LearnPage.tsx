@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { CheckCircle2, Circle, Languages } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
+import { formatDuration } from "@/lib/duration"
 import type { Lang } from "@/lib/types"
 import { MinutesBar } from "@/components/charts/MinutesBar"
 import { Badge } from "@/components/ui/badge"
@@ -39,6 +40,8 @@ export default function LearnPage() {
 
   const todayDone: Record<Lang, boolean> = { en: !!stats?.today.en, es: !!stats?.today.es }
   const profileFor = (lang: Lang) => profiles.find((p) => p.lang === lang)
+  // 今日大数字：formatDuration 输出「<数值> <单位>」按空格拆开，保留单位小字的视觉层级
+  const [todayNum, todayUnit] = (stats ? formatDuration(stats.today.minutes) : "").split(" ")
 
   return (
     <div className="max-w-6xl space-y-5">
@@ -70,8 +73,8 @@ export default function LearnPage() {
             </div>
             <Separator orientation="vertical" className="hidden sm:block h-12" />
             <div className="text-sm text-muted-foreground space-y-1">
-              <p className="tnum">本周 <span className="font-medium text-foreground">{stats.week.minutes}</span> 分钟 · {stats.week.days} 天</p>
-              <p className="tnum">累计 <span className="font-medium text-foreground">{Math.floor(stats.total.minutes / 60)}</span> 小时 · {stats.total.days} 天</p>
+              <p className="tnum">本周 <span className="font-medium text-foreground">{formatDuration(stats.week.minutes)}</span> · {stats.week.days} 天</p>
+              <p className="tnum">累计 <span className="font-medium text-foreground">{formatDuration(stats.total.minutes)}</span> · {stats.total.days} 天</p>
             </div>
           </CardContent>
         </Card>
@@ -86,7 +89,7 @@ export default function LearnPage() {
           <CardContent className="space-y-3">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
               <p className="text-3xl font-semibold tnum">
-                {stats.today.minutes}<span className="text-sm font-normal text-muted-foreground ml-1">分钟</span>
+                {todayNum}<span className="text-sm font-normal text-muted-foreground ml-1">{todayUnit}</span>
               </p>
               <div className="flex items-center gap-3 text-sm">
                 {LANGS.map((lang) => (
@@ -105,7 +108,7 @@ export default function LearnPage() {
               <div className="flex flex-wrap gap-1.5">
                 {stats.today.by_activity.map((a) => (
                   <Badge key={a.activity} variant="secondary" className="tnum font-normal">
-                    {ACTIVITY_LABELS[a.activity] ?? a.activity} · {a.minutes} 分钟
+                    {ACTIVITY_LABELS[a.activity] ?? a.activity} · {formatDuration(a.minutes)}
                   </Badge>
                 ))}
               </div>
@@ -148,7 +151,7 @@ export default function LearnPage() {
                     : "还没有目标与备注，点「编辑」设置"}
                 </p>
                 <p className="text-xs text-muted-foreground tnum">
-                  累计 {byLang?.minutes ?? 0} 分钟 · {byLang?.days ?? 0} 天
+                  累计 {formatDuration(byLang?.minutes ?? 0)} · {byLang?.days ?? 0} 天
                 </p>
               </CardContent>
             </Card>

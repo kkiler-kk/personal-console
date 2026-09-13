@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { api } from "@/lib/api"
+import { formatDuration } from "@/lib/duration"
 import type { CalendarDay } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -50,7 +51,7 @@ function MonthCard({ year, month, dayMap, todayKey }: {
           const key = dateKey(year, month, d)
           const rec = dayMap.get(key)
           const title = rec
-            ? `${month + 1}月${d}日 · ${rec.minutes > 0 ? `${rec.minutes} 分钟` : "已打卡"}${rec.langs.length > 0 ? ` · ${rec.langs.join(",")}` : ""}`
+            ? `${month + 1}月${d}日 · ${rec.minutes > 0 ? formatDuration(rec.minutes) : "已打卡"}${rec.langs.length > 0 ? ` · ${rec.langs.join(",")}` : ""}`
             : `${month + 1}月${d}日 · 无记录`
           return (
             <div key={key} title={title}
