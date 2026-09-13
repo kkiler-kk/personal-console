@@ -38,7 +38,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="w-full max-w-sm shadow-[0_1px_3px_rgba(0,0,0,.06)]">
         <CardHeader>
-          <CardTitle>KK 控制台</CardTitle>
+          <CardTitle>Felix 控制台</CardTitle>
           <CardDescription>登录以访问你的个人数据</CardDescription>
         </CardHeader>
         <CardContent>

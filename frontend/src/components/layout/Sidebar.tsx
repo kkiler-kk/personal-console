@@ -14,7 +14,7 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
 export function Sidebar() {
   return (
     <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-border bg-card">
-      <div className="h-14 flex items-center px-5 font-semibold text-lg">KK 控制台</div>
+      <div className="h-14 flex items-center px-5 font-semibold text-lg">Felix 控制台</div>
       <nav className="flex-1 px-3 space-y-1">
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} end={to === "/"}

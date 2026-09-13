@@ -68,3 +68,22 @@ export interface LearnStats {
   recent: DayMinutes[]
 }
 export interface CalendarDay { date: string; minutes: number; langs: Lang[] }
+
+// GET /api/search（Task S2）：五类聚合，键名与后端 handler/search.go json tag 逐字一致；
+// 后端保证五键恒在（空为 []），单类失败不整体 500
+export interface SearchResult {
+  posts: { id: number; title: string; slug: string; summary: string }[]
+  assets: { id: number; symbol: string; name: string; type: AssetType }[]
+  habits: { id: number; name: string; icon: string }[]
+  categories: { id: number; name: string; slug: string }[]
+  tags: { id: number; name: string }[]
+}
+
+// GET /api/learn/sessions（Task S1）：对齐后端 model.StudySession json tag，
+// 前端命名按 types 惯例称 LearnSession。session_date/created_at 为 RFC3339 串，
+// session_date 是本地午夜，取日期部分用前 10 字符（Task S3 消费）
+export interface LearnSession {
+  id: number; lang: Lang; activity: ActivityType; minutes: number
+  session_date: string; note: string; created_at: string
+}
+export interface LearnSessionsResp { sessions: LearnSession[]; total: number }

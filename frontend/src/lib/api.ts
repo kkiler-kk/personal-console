@@ -1,4 +1,4 @@
-import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Habit, HeatmapDay, Post, PostListResp, ArchiveItem, Tag, Asset, AssetType, PriceSource, Trade, PositionsResp, PositionsHistoryResp, ActivityType, CalendarDay, Lang, LanguageProfile, LearnStats } from "./types"
+import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Habit, HeatmapDay, Post, PostListResp, ArchiveItem, Tag, Asset, AssetType, PriceSource, Trade, PositionsResp, PositionsHistoryResp, ActivityType, CalendarDay, Lang, LanguageProfile, LearnStats, LearnSessionsResp, SearchResult } from "./types"
 
 const BASE = "/api"
 
@@ -91,6 +91,9 @@ export const api = {
 
   getDashboardSummary: () => request<DashboardSummary>("/dashboard/summary"),
 
+  // 全站搜索（Task S2）：后端 q trim 后 1..50 rune，越界 400；调用方（CommandPalette）enabled 门控
+  search: (q: string) => request<SearchResult>(`/search${qs({ q })}`),
+
   getAssets: () => request<{ assets: Asset[] }>("/assets"),
   createAsset: (body: { symbol: string; name: string; type: AssetType; price_source: PriceSource; currency: "USD" | "CNY" }) =>
     request<{ id: number }>("/assets", { method: "POST", body: JSON.stringify(body) }),
@@ -113,6 +116,7 @@ export const api = {
   deleteLearnSession: (id: number) => request<{ message: string }>(`/learn/sessions/${id}`, { method: "DELETE" }),
   getLearnStats: () => request<LearnStats>("/learn/stats"),
   getLearnCalendar: (year?: number) => request<{ days: CalendarDay[] }>(`/learn/calendar${qs({ year })}`),
+  getLearnSessions: (limit?: number) => request<LearnSessionsResp>(`/learn/sessions${qs({ limit })}`),
 
   // habits（Task 4.2 契约）：List 默认滤归档，all=1 含归档；check/uncheck body {date?} 缺省今天（后端 Go 本地）；
   // 成功 message 文案（"ok"/"check removed"）不做逻辑依赖
