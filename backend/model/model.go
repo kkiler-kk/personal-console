@@ -90,6 +90,7 @@ type Asset struct {
 	Currency       string     `json:"currency" db:"currency"`
 	CurrentPrice   *float64   `json:"current_price" db:"current_price"`
 	PriceUpdatedAt *time.Time `json:"price_updated_at" db:"price_updated_at"`
+	SortOrder      int        `json:"sort_order" db:"sort_order"`
 	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
 }

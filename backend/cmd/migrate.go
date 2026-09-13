@@ -182,6 +182,17 @@ func autoMigrate(db *sqlx.DB) {
 		log.Fatalf("auto migrate failed: %v", err)
 	}
 
+	// seed the single-user "felix" account (id=1). SingleUserMiddleware treats every request as
+	// users.id=1, but the Register endpoint was removed with the login flow (2026-09-13), so a
+	// fresh database would otherwise have no way to create that row. Placed after the statements
+	// loop (users table exists) alongside the notes seed. INSERT IGNORE is idempotent: on an
+	// existing DB that already has a user with id=1 it is a no-op. The password is a bcrypt hash
+	// (cost 10) of the fixed non-secret string "single-user-no-login" — it is NOT loginable
+	// (auth removed); if auth is ever restored the user should change this password.
+	if _, err := db.Exec(`INSERT IGNORE INTO users (id, username, password, nickname) VALUES (1, 'felix', '$2a$10$HVXvvmJ7ZlX/.Y2JfxkBROLeH29JinMlx.qq.xvQpZYYuegl1pDO6', 'Felix')`); err != nil {
+		log.Fatalf("auto migrate failed: %v", err)
+	}
+
 	// widen assets.price_source to fit 'computed_gold_cny' (17 chars > legacy VARCHAR(16)); idempotent
 	var priceSourceLen int
 	if err := db.Get(&priceSourceLen, `
@@ -193,6 +204,29 @@ func autoMigrate(db *sqlx.DB) {
 		if _, err := db.Exec("ALTER TABLE assets MODIFY COLUMN price_source VARCHAR(32) NOT NULL DEFAULT 'yahoo'"); err != nil {
 			log.Fatalf("auto migrate failed: %v", err)
 		}
+	}
+
+	// add assets.sort_order if missing (idempotent) — persistent drag-sort ordering (Task 3).
+	// Same information_schema probe pattern as categories.section / assets.price_source above.
+	var sortOrderCount int
+	if err := db.Get(&sortOrderCount, `
+		SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = DATABASE() AND table_name = 'assets' AND column_name = 'sort_order'`); err != nil {
+		log.Fatalf("auto migrate failed: %v", err)
+	}
+	if sortOrderCount == 0 {
+		if _, err := db.Exec("ALTER TABLE assets ADD COLUMN sort_order INT NOT NULL DEFAULT 0"); err != nil {
+			log.Fatalf("auto migrate failed: %v", err)
+		}
+	}
+
+	// One-time normalization of legacy rows to sort_order = id. Naturally idempotent: the WHERE
+	// sort_order = 0 predicate only matches rows that have never been ordered (fresh ALTER leaves
+	// DEFAULT 0); after the first run every row is non-zero, so subsequent startups affect 0 rows.
+	// New assets get MAX(sort_order)+1 (always > 0) in Create, and Reorder writes 1..N, so a
+	// legitimate user-assigned order is never 0 and never clobbered here.
+	if _, err := db.Exec("UPDATE assets SET sort_order = id WHERE sort_order = 0"); err != nil {
+		log.Fatalf("auto migrate failed: %v", err)
 	}
 
 	log.Println("database tables migrated")

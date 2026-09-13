@@ -109,6 +109,9 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client, qs *quote.Service
 		// invest: assets
 		protected.GET("/assets", ah.List)
 		protected.POST("/assets", ah.Create)
+		// /assets/reorder 为纯静态段，与 /assets/:id 参数段同在 PUT 树。注册在 :id 之前，
+		// 让静态分支优先；gin v1.10 起服实测无冲突（见 task-3 报告）。
+		protected.PUT("/assets/reorder", ah.Reorder)
 		protected.PUT("/assets/:id", ah.Update)
 		protected.DELETE("/assets/:id", ah.Delete)
 		protected.PUT("/assets/:id/price", ah.UpdatePrice)

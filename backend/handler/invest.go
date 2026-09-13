@@ -78,7 +78,7 @@ type PositionsResp struct {
 func (h *InvestHandler) ComputePositionsResponse(ctx context.Context) (*PositionsResp, error) {
 	assets := []model.Asset{}
 	if err := h.db.SelectContext(ctx, &assets,
-		"SELECT * FROM assets ORDER BY created_at"); err != nil {
+		"SELECT * FROM assets ORDER BY sort_order, created_at"); err != nil {
 		return nil, err
 	}
 

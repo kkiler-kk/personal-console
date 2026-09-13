@@ -32,11 +32,11 @@ func NewAssetHandler(db *sqlx.DB, qs *quote.Service, rdb *redis.Client) *AssetHa
 	return &AssetHandler{db: db, quotes: qs, redis: rdb}
 }
 
-// List 返回全部资产，按创建时间升序。
+// List 返回全部资产，按自定义拖拽序（sort_order）升序，同序回退创建时间。
 func (h *AssetHandler) List(c *gin.Context) {
 	assets := []model.Asset{}
 	if err := h.db.SelectContext(c.Request.Context(), &assets,
-		"SELECT * FROM assets ORDER BY created_at"); err != nil {
+		"SELECT * FROM assets ORDER BY sort_order, created_at"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -83,9 +83,18 @@ func (h *AssetHandler) Create(c *gin.Context) {
 		assetType = "fund"
 	}
 
+	// 新资产排在末尾：sort_order = 现有最大值 + 1（恒 > 0，永不被迁移的归一 UPDATE 误触）。
+	// 单用户本地部署无并发压力，先查后插即可（无需事务/唯一约束）。
+	var nextSort int
+	if err := h.db.GetContext(c.Request.Context(), &nextSort,
+		"SELECT COALESCE(MAX(sort_order),0)+1 FROM assets"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	res, err := h.db.ExecContext(c.Request.Context(),
-		"INSERT INTO assets (symbol, name, type, price_source, currency) VALUES (?,?,?,?,?)",
-		symbol, req.Name, assetType, req.PriceSource, currency)
+		"INSERT INTO assets (symbol, name, type, price_source, currency, sort_order) VALUES (?,?,?,?,?,?)",
+		symbol, req.Name, assetType, req.PriceSource, currency, nextSort)
 	if err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
@@ -243,4 +252,72 @@ func (h *AssetHandler) UpdatePrice(c *gin.Context) {
 	}
 	h.redis.Del(context.Background(), "quote:"+row.Symbol)
 	c.JSON(http.StatusOK, gin.H{"message": "price updated"})
+}
+
+// Reorder 持久化拖拽排序：PUT /api/assets/reorder，body {ids:[int64,...]}。
+// 校验：ids 必须与全部现存资产 id 集合完全一致（数量 + 成员，顺序任意），否则 400，
+// 防止部分/重复/越界 id 造成脏序；通过后在单事务内逐位写 sort_order=1..N，
+// 任一步失败整体回滚（500），成功再失效 dashboard 缓存（持仓面板行序随之变化）。
+func (h *AssetHandler) Reorder(c *gin.Context) {
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required,gt=0,dive,gt=0"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ctx := c.Request.Context()
+
+	existing := []int64{}
+	if err := h.db.SelectContext(ctx, &existing, "SELECT id FROM assets"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 集合完全一致：先比数量（同时拦截 ids 含重复但凑够数量的情况），再逐 id 校验成员且无重复。
+	mismatch := func() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ids must match all existing assets"})
+	}
+	if len(req.IDs) != len(existing) {
+		mismatch()
+		return
+	}
+	existSet := make(map[int64]struct{}, len(existing))
+	for _, id := range existing {
+		existSet[id] = struct{}{}
+	}
+	seen := make(map[int64]struct{}, len(req.IDs))
+	for _, id := range req.IDs {
+		if _, ok := existSet[id]; !ok {
+			mismatch()
+			return
+		}
+		if _, dup := seen[id]; dup {
+			mismatch()
+			return
+		}
+		seen[id] = struct{}{}
+	}
+
+	tx, err := h.db.BeginTxx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer tx.Rollback() // Commit 后为 no-op（sql.ErrTxDone 被忽略）；中途失败/panic 时兜底回滚
+
+	for i, id := range req.IDs {
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE assets SET sort_order=? WHERE id=?", i+1, id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.redis.Del(context.Background(), "dashboard:summary")
+	c.JSON(http.StatusOK, gin.H{"message": "assets reordered"})
 }
