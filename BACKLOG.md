@@ -28,3 +28,4 @@
 15. 遮蔽态下「已清仓」badge 仍显示（间接泄露数量=0；如需严格可 masked 时隐藏）
 16. lib/mask.ts mount 时无条件回写 localStorage（首访创建 invest-mask="0" 键，纯卫生）
 17. AssetDialog manual 预设切换不重置 type（显示与提交一致，无实害）
+18. formatDuration 输出格式与 LearnPage 大数字拆分的隐式契约（建议改返回 {value,unit} 或加 splitDuration helper）；NaN 守卫可选（learn 时长显示迭代审查移交）
