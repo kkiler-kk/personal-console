@@ -93,6 +93,13 @@ try {
   }
   // 形状断言：pe_ttm 键必须存在（manual 资产值为 null 属预期，键缺席才是回归）
   if (!("pe_ttm" in row)) throw new Error("position row missing pe_ttm key: " + JSON.stringify(row))
+  // reorder 回归门：SMOKETEST 已在库，全量 ids 原序往返提交须 200（顺序不变，无副作用）；
+  // 缺一个 id 的部分集合提交须 400（端点侧「ids 与全部资产一致」校验的守护断言）
+  const allIds = ((await (await page.request.get(BASE + "/api/assets")).json()).assets).map((a) => a.id)
+  const ro = await page.request.put(BASE + "/api/assets/reorder", { data: { ids: allIds } })
+  if (!ro.ok()) throw new Error("reorder original order failed: " + ro.status())
+  const roBad = await page.request.put(BASE + "/api/assets/reorder", { data: { ids: allIds.slice(1) } })
+  if (roBad.status() !== 400) throw new Error("reorder missing id should be 400, got: " + roBad.status())
   await page.goto(BASE + "/invest", { waitUntil: "networkidle" })
   await page.waitForSelector("text=SMOKETEST", { timeout: 10_000 })
 } finally {

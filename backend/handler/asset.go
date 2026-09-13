@@ -274,7 +274,7 @@ func (h *AssetHandler) Reorder(c *gin.Context) {
 		return
 	}
 
-	// 集合完全一致：先比数量（同时拦截 ids 含重复但凑够数量的情况），再逐 id 校验成员且无重复。
+	// 集合完全一致：先比数量（只拦总数不符），再逐 id 校验成员归属，重复（含等长凑数的重复 ids）由 seen 集拦截。
 	mismatch := func() {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ids must match all existing assets"})
 	}

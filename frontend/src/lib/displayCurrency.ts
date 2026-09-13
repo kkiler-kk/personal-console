@@ -7,7 +7,10 @@ const STORAGE_KEY = "invest-total-currency"
 
 export type DisplayCurrency = "CNY" | "USD"
 
-/** 币种符号（切换按钮/Dashboard 迷你前缀消费，与 formatMoney 的 zh-CN Intl 前缀一致） */
+/**
+ * 币种符号（切换按钮/Dashboard 迷你前缀消费）。
+ * CNY 与 formatMoney 的 zh-CN Intl 前缀一致（¥）；USD 两处前缀风格不同：Intl 出 "US$"、此处手拼 "$"，数值口径同源。
+ */
 export const CURRENCY_SYMBOL: Record<DisplayCurrency, string> = { CNY: "¥", USD: "$" }
 
 function readStored(): DisplayCurrency {

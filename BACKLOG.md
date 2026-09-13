@@ -50,3 +50,10 @@
 27. search.go:27 「防 sql_mode 漂移」注释措辞过强（sql_mode 漂移下 ESCAPE 同样失效，只是显式报错而非静默错义）
 28. asset.go Reorder 注释（~:257）防线分工失准——「数量比对」并不能拦截等长重复 ids，`seen` 集合才是重复的拦截者；router.go:112 注释两处小疵（gin≥1.5 静态段天然优先于参数段、注册先后无关；「见 task-3 报告」指针会悬空，应改为自含结论）
 29. model.go `Comment.CanDelete` 行 gofmt 对齐（HEAD 起既有问题，历次任务未越权修，留档可另起 chore）
+
+## 终审微修波移交（2026-09-13）
+
+30. a11y：持仓拖拽键盘不可达（并 24 扩充）——把手 span 无 role/可操作语义（T6 的 `aria-label` 只补了命名），列排序为部分替代；且文档（README/spec）未注明该键盘限制，需在文档补一句或补 role="button" + 键盘重排方案
+31. gofmt 一次性 pass（并 29）——`gofmt -l backend` 现报 `model/model.go`（CanDelete 对齐）与 `handler/post.go` 两文件；纯格式零行为，另起独立 chore 提交，勿混入功能波
+32. `resolveDisplayCurrency` 提取共享（并 25 设触发条件）——现 InvestPage/Dashboard 双份 fx 回落判定不动，**第三消费点出现时**再提取，避免过早抽象
+33. smoke 币种切换断言（可选）——UI 拨 CNY↔USD 开关后断言汇总卡前缀/换算数值（当前 step 8 只覆盖 API 层；reorder 回归门已于终审波入 step 8）
