@@ -3,6 +3,7 @@ package quote
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -94,6 +95,40 @@ func TestServiceUSDCNYProviderAndFallback(t *testing.T) {
 	down := &fakeProvider{name: "down", err: errors.New("boom")}
 	s2 := newServiceWithProviders(nil, nil, nil, down)
 	if rate := s2.USDCNY(context.Background()); rate != fxFallbackRate {
+		t.Fatalf("rate=%v want fallback %.1f", rate, fxFallbackRate)
+	}
+}
+
+// fx 缓存中的 "+Inf" 能通过 ParseFloat 且 >0 为真，必须按 corrupted 处理走降级链，
+// 而非把 +Inf 喂给下游 json.Marshal（终审 M-1）。真 Redis 不可达时 Skip。
+func TestServiceUSDCNYCacheInfTreatedAsCorrupted(t *testing.T) {
+	rdb := testRedisClient(t)
+	fundTestKeys(t, rdb, fxCacheKey)
+	ctx := context.Background()
+	if err := rdb.Set(ctx, fxCacheKey, "+Inf", fxCacheTTL).Err(); err != nil {
+		t.Fatalf("seed corrupted fx cache: %v", err)
+	}
+
+	// provider 可用：视为缓存脏数据，降级到 provider 取真实汇率。
+	fx := &fakeProvider{name: "fx", quotes: map[string]*RawQuote{
+		"CNY=X": {Price: 7.1234, Currency: "CNY"},
+	}}
+	s := newServiceWithProviders(nil, nil, rdb, fx)
+	if rate := s.USDCNY(ctx); rate != 7.1234 {
+		t.Fatalf("rate=%v want 7.1234 (+Inf cache must fall through to provider)", rate)
+	}
+
+	// provider 全挂：重种 +Inf 后应落到 7.0 兜底，两条路径都不得返回 ±Inf。
+	if err := rdb.Set(ctx, fxCacheKey, "+Inf", fxCacheTTL).Err(); err != nil {
+		t.Fatalf("re-seed corrupted fx cache: %v", err)
+	}
+	down := &fakeProvider{name: "down", err: errors.New("boom")}
+	s2 := newServiceWithProviders(nil, nil, rdb, down)
+	rate := s2.USDCNY(ctx)
+	if math.IsInf(rate, 0) {
+		t.Fatalf("+Inf leaked from corrupted fx cache: rate=%v", rate)
+	}
+	if rate != fxFallbackRate {
 		t.Fatalf("rate=%v want fallback %.1f", rate, fxFallbackRate)
 	}
 }

@@ -29,3 +29,11 @@
 16. lib/mask.ts mount 时无条件回写 localStorage（首访创建 invest-mask="0" 键，纯卫生）
 17. AssetDialog manual 预设切换不重置 type（显示与提交一致，无实害）
 18. formatDuration 输出格式与 LearnPage 大数字拆分的隐式契约（建议改返回 {value,unit} 或加 splitDuration helper）；NaN 守卫可选（learn 时长显示迭代审查移交）
+
+## 阶段 2.6 终审移交（2026-09-13）
+
+19. CNY 折算消费实际报价币种（q.Currency）而非仅资产币种，或加不变量「FundCN 供价资产 currency 必为 CNY」并在路由/写回校验——根治 symbol 形态路由 vs price_source 强制币种的结构性错配
+20. "us"/"ashare" 预设补裸 6 位码轻校验 toast（提示将按中国基金净值源计价），堵 UI 误建路径
+21. 用前导零基金（如 000001）跑一次真链验证 FCODE 回显与分页历史
+22. PE 排除可按 symbol 形态扩展（既有裸 6 位 yahoo 资产少打一次无效 v7）
+23. Radix Tabs → ToggleGroup a11y 语义（筛选器场景）

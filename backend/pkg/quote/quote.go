@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -304,7 +305,8 @@ func (s *Service) staleQuote(ctx context.Context, symbol string) (Quote, bool) {
 func (s *Service) USDCNY(ctx context.Context) float64 {
 	if s.rdb != nil {
 		if v, err := s.rdb.Get(ctx, fxCacheKey).Result(); err == nil {
-			if rate, perr := strconv.ParseFloat(v, 64); perr == nil && rate > 0 {
+			// +Inf 能通过 >0（NaN 天然被挡），会一路喂给 json.Marshal，必须显式守卫（M-1）。
+			if rate, perr := strconv.ParseFloat(v, 64); perr == nil && rate > 0 && !math.IsInf(rate, 0) {
 				return rate
 			}
 			log.Printf("quote: corrupted %s cache value %q", fxCacheKey, v)
