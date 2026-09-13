@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -86,7 +87,8 @@ func stooqCurrency(mapped string) string {
 }
 
 // Fetch 实现 Provider：请求 CSV，取第二行 Close 为价格。
-// 非 200 / 无数据行 / 短行 / Close 为 "N/D" 或 <=0 → error（降级链静默跳到下一个）。
+// 非 200 / 无数据行 / 短行 / Close 为 "N/D"、<=0 或非有限值（NaN/Inf）→ error
+// （降级链静默跳到下一个）。
 func (s *StooqProvider) Fetch(ctx context.Context, symbol string) (*RawQuote, error) {
 	mapped, ok := mapStooqSymbol(symbol)
 	if !ok {
@@ -126,6 +128,13 @@ func (s *StooqProvider) Fetch(ctx context.Context, symbol string) (*RawQuote, er
 	price, err := strconv.ParseFloat(closeField, 64)
 	if err != nil {
 		return nil, fmt.Errorf("stooq: parse close %s %q: %w", symbol, closeField, err)
+	}
+	// ParseFloat 把字面量 "NaN"/"Inf"/"Infinity" 解成非有限值且 err==nil；NaN 能绕过
+	// 下方 <=0 判定（NaN 的任何比较恒 false）一路进到 json.Marshal（不支持 NaN/Inf）
+	// → gin Render panic → Recovery 500，击穿「Quotes/positions 永不 error、恒 200」。
+	// 与 fundcn.flexFloat 同语义显式拒绝（1e999 这类溢出已由上方 ErrRange 分支拦住）。
+	if math.IsNaN(price) || math.IsInf(price, 0) {
+		return nil, fmt.Errorf("stooq: fetch %s: non-finite close %q", symbol, closeField)
 	}
 	if price <= 0 {
 		return nil, fmt.Errorf("stooq: fetch %s: invalid close %v", symbol, price)

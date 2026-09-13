@@ -2,6 +2,7 @@ package quote
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -100,6 +101,24 @@ func TestStooqZeroCloseIsError(t *testing.T) {
 	s := newTestStooq(newCSVServer(t, body))
 	if _, err := s.Fetch(contextOf(), "AAPL"); err == nil {
 		t.Fatal("want error when close <= 0")
+	}
+}
+
+func TestStooqNonFiniteCloseIsError(t *testing.T) {
+	// ParseFloat 对字面量 "NaN"/"Inf"/"Infinity" 返回非有限值且 err==nil，会绕过
+	// close<=0 判定（NaN 的任何比较恒 false）→ RawQuote.Price=NaN → json.Marshal
+	// 不支持 → gin Render panic → Recovery 500，击穿「positions 恒 200」。
+	// 与 fundcn.flexFloat 同语义显式拒绝（"-Inf"/"1e999" 原路径已拦住，一并回归锁定）。
+	for _, closeField := range []string{"NaN", "nan", "Inf", "+Inf", "-Inf", "Infinity", "-Infinity", "1e999"} {
+		body := "Symbol,Date,Time,Open,High,Low,Close,Volume\nAAPL.US,2026-09-11,16:15:00,1,1,1," + closeField + ",1\n"
+		s := newTestStooq(newCSVServer(t, body))
+		q, err := s.Fetch(contextOf(), "AAPL")
+		if err == nil {
+			t.Fatalf("close=%q: want error, got q=%+v", closeField, q)
+		}
+		if q != nil && (math.IsNaN(q.Price) || math.IsInf(q.Price, 0)) {
+			t.Fatalf("close=%q: 非有限值不得进 RawQuote: %+v", closeField, q)
+		}
 	}
 }
 
