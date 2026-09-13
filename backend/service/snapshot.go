@@ -19,7 +19,7 @@ var snapshotLoc = time.FixedZone("CST", 8*3600)
 const snapshotCronSpec = "0 6 * * *"
 
 // StartSnapshotScheduler 启动每日快照调度器，并异步执行启动补跑：
-// 若当前北京时间已过今天 06:00 且存在任一自动跟踪资产（yahoo/computed_gold_cny）
+// 若当前北京时间已过今天 06:00 且存在任一自动跟踪资产（yahoo/computed_gold_cny/fund_cn）
 // 在补跑日期（今天 06:00 CST 对应的 UTC 日期，恒为 D-1，与 cron 行日期同口径）
 // 无快照行，则补跑 RunSnapshot 一次（goroutine 内执行，不阻塞启动，recover 兜底）。
 // 返回已 Start 的 cron 句柄，调用方负责 Stop（通常 main 里 defer）。
@@ -73,7 +73,7 @@ func catchUpNeeded(ctx context.Context, db *sqlx.DB) (time.Time, bool) {
 	var missing int
 	err := db.GetContext(ctx, &missing,
 		`SELECT COUNT(*) FROM assets a
-		 WHERE a.price_source IN ('yahoo','computed_gold_cny')
+		 WHERE a.price_source IN ('yahoo','computed_gold_cny','fund_cn')
 		   AND NOT EXISTS (SELECT 1 FROM price_history p
 		                   WHERE p.symbol=a.symbol AND p.date=?)`,
 		snapshotDate.Format("2006-01-02"))
@@ -84,10 +84,12 @@ func catchUpNeeded(ctx context.Context, db *sqlx.DB) (time.Time, bool) {
 	return snapshotDate, missing > 0
 }
 
-// RunSnapshot 为全部自动跟踪资产（price_source IN yahoo/computed_gold_cny，manual 不快照）
+// RunSnapshot 为全部自动跟踪资产（price_source IN yahoo/computed_gold_cny/fund_cn，manual 不快照）
 // 抓取当前价并写入 price_history 的指定日期行：
 //   - 日期口径：行日期 = snapshotDate 的 UTC 日期 ≈ 美股交易日；
 //     cron 06:00 CST 触发时 = 前一日 22:00 UTC，故传 time.Now().UTC() 即为刚收盘的交易日；
+//     对 fund_cn 该口径同样成立——06:00 CST 时 D-1 的官方净值已公布、D 日净值尚未产生，
+//     取到的正是 D-1 净值，写入 date=D-1 行；
 //   - 仅取 !Stale 且 Price>0 的报价（qs.Quotes 永不返回 error，缺席即跳过）；
 //   - upsert 依赖 uk_symbol_date 幂等，同日期重跑覆盖 close；
 //   - 空资产表 → log "0/0" 正常返回；单条失败只 log 继续。
@@ -98,7 +100,7 @@ func RunSnapshot(ctx context.Context, db *sqlx.DB, qs *quote.Service, snapshotDa
 		PriceSource string `db:"price_source"`
 	}
 	if err := db.SelectContext(ctx, &assets,
-		`SELECT symbol, price_source FROM assets WHERE price_source IN ('yahoo','computed_gold_cny')`); err != nil {
+		`SELECT symbol, price_source FROM assets WHERE price_source IN ('yahoo','computed_gold_cny','fund_cn')`); err != nil {
 		log.Printf("snapshot: load assets: %v", err)
 		return
 	}

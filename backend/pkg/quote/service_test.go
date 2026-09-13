@@ -114,3 +114,26 @@ func TestServiceGoldHookNilSkips(t *testing.T) {
 		t.Fatalf("gold quote should be absent while resolver is nil, got=%+v", got)
 	}
 }
+
+// NewService 组装的降级链必须为 Yahoo → Stooq → FundCN（末位为 6 位数字基金码兜底，
+// 前两源对基金码都会在发请求前快速 ErrUnsupported），且 GoldSymbol 特判仍由 goldResolver 承担。
+func TestNewServiceProviderChainOrder(t *testing.T) {
+	s := NewService(nil, nil, nil)
+
+	want := []string{"yahoo", "stooq", "fund_cn"}
+	if len(s.providers) != len(want) {
+		names := make([]string, 0, len(s.providers))
+		for _, p := range s.providers {
+			names = append(names, p.Name())
+		}
+		t.Fatalf("provider chain = %v, want %v", names, want)
+	}
+	for i, name := range want {
+		if got := s.providers[i].Name(); got != name {
+			t.Fatalf("providers[%d] = %q, want %q", i, got, name)
+		}
+	}
+	if s.gold == nil {
+		t.Fatal("NewService 必须注入 goldResolver")
+	}
+}

@@ -125,6 +125,40 @@ func TestYahooHistorySkipsNullClose(t *testing.T) {
 	}
 }
 
+// 双 guard 之二：裸 6 位数字是中国场外基金代码，Yahoo 必须立即让位给 FundCNProvider，
+// 不发注定 404 的请求；带交易所后缀的 A 股/港股代码不受影响。
+func TestYahooBareSixDigitsRoutedToFundCN(t *testing.T) {
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(yahooQuoteBody))
+	}))
+	t.Cleanup(srv.Close)
+	y := newTestProvider(srv)
+
+	for _, sym := range []string{"110022", "000001", "999999"} {
+		if _, err := y.Fetch(context.Background(), sym); err != ErrUnsupported {
+			t.Fatalf("Fetch(%q): want ErrUnsupported, got %v", sym, err)
+		}
+		if _, err := y.History(context.Background(), sym, 30); err != ErrUnsupported {
+			t.Fatalf("History(%q): want ErrUnsupported, got %v", sym, err)
+		}
+	}
+	if hits != 0 {
+		t.Fatalf("guard 应在发请求前拦截，实际命中 %d 次", hits)
+	}
+
+	for _, sym := range []string{"600519.SS", "000001.SZ", "0700.HK"} {
+		if _, err := y.Fetch(context.Background(), sym); err != nil {
+			t.Fatalf("Fetch(%q) 不应被 guard 拦截: %v", sym, err)
+		}
+	}
+	if hits != 3 {
+		t.Fatalf("带后缀代码应放行，hits=%d want 3", hits)
+	}
+}
+
 func TestYahooSymbolPathEscaped(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,6 @@
 // Package quote 提供投资模块行情子系统：Provider 降级链 + Redis 缓存 + DB 兜底。
 //
-// 降级顺序（Quotes）：Redis 60s 缓存 → provider 链（Yahoo → Stooq）
+// 降级顺序（Quotes）：Redis 60s 缓存 → provider 链（Yahoo → Stooq → FundCN）
 // → assets.current_price 兜底（Stale=true）→ 无兜底则该 symbol 缺席并 log。
 // 行情失败只降级不抛出：Quotes 永不返回 error。
 package quote
@@ -101,11 +101,16 @@ type Service struct {
 }
 
 // NewService 组装行情服务（Ruling-1 固定签名）：
-// QuoteProxy 非空时经代理访问外网，超时 10s；provider 降级链为 Yahoo → Stooq；
+// QuoteProxy 非空时经代理访问外网，超时 10s；provider 降级链为 Yahoo → Stooq → FundCN；
 // 并注入 goldResolver 解析 GoldSymbol（GC=F × USDCNY → CNY/克）。
+//
+// FundCN 置于末位：它只认纯 6 位数字的中国场外基金码，而 Yahoo/Stooq 对该形态都会在
+// 发请求前快速返回 ErrUnsupported（Yahoo 有显式 guard，Stooq 的符号映射天然拒绝），
+// 故基金码最多两次零成本跳过即可命中 FundCN；其余 symbol 对 FundCN 同样是零成本跳过。
 func NewService(cfg *config.Config, db *sqlx.DB, rdb *redis.Client) *Service {
 	client := newHTTPClient(cfg)
-	s := newServiceWithProviders(cfg, db, rdb, NewYahooProvider(client), NewStooqProvider(client))
+	s := newServiceWithProviders(cfg, db, rdb,
+		NewYahooProvider(client), NewStooqProvider(client), NewFundCNProvider(client))
 	s.gold = newGoldResolver(s)
 	return s
 }

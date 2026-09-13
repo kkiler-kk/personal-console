@@ -19,7 +19,8 @@ import (
 )
 
 // AssetHandler 处理投资资产的 CRUD 与手动改价。
-// quotes 用于 yahoo/computed 资产创建后的历史回填；redis 用于改价后失效行情缓存。
+// quotes 用于自动跟踪资产（yahoo/computed_gold_cny/fund_cn）创建后的历史回填；
+// redis 用于改价后失效行情缓存。
 type AssetHandler struct {
 	db     *sqlx.DB
 	quotes *quote.Service
@@ -44,13 +45,14 @@ func (h *AssetHandler) List(c *gin.Context) {
 
 // Create 新建资产。type/price_source/currency 走白名单校验；
 // price_source=computed_gold_cny 强制 symbol=GOLD_CNY_G/currency=CNY/type=metal；
-// 重复 symbol → 409；yahoo/computed 创建后异步回填 365 天历史。
+// price_source=fund_cn 要求 symbol 为纯 6 位数字并强制 currency=CNY/type=fund；
+// 重复 symbol → 409；自动跟踪源（yahoo/computed_gold_cny/fund_cn）创建后异步回填 365 天历史。
 func (h *AssetHandler) Create(c *gin.Context) {
 	var req struct {
 		Symbol      string `json:"symbol" binding:"required"`
 		Name        string `json:"name" binding:"required"`
-		Type        string `json:"type" binding:"required,oneof=stock etf metal other"`
-		PriceSource string `json:"price_source" binding:"required,oneof=yahoo computed_gold_cny manual"`
+		Type        string `json:"type" binding:"required,oneof=stock etf metal fund other"`
+		PriceSource string `json:"price_source" binding:"required,oneof=yahoo computed_gold_cny manual fund_cn"`
 		Currency    string `json:"currency" binding:"required,oneof=USD CNY"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -58,14 +60,27 @@ func (h *AssetHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// symbol 先 TrimSpace+ToUpper 归一（6 位数字基金码无大小写，ToUpper 对其为恒等变换，
+	// 故下方 fund_cn 校验放在归一之后不影响契约）。
 	symbol := strings.ToUpper(strings.TrimSpace(req.Symbol))
 	assetType := req.Type
 	currency := req.Currency
-	if req.PriceSource == "computed_gold_cny" {
+	switch req.PriceSource {
+	case "computed_gold_cny":
 		// 积存金为虚拟资产，忽略入参强制三要素
 		symbol = quote.GoldSymbol
 		currency = "CNY"
 		assetType = "metal"
+	case "fund_cn":
+		// 中国场外基金：symbol 必须匹配 FundCNProvider 的契约（纯 6 位数字），
+		// 否则净值源只会返回 ErrUnsupported、资产永远无价；计价与类型同样强制，
+		// 避免前端漏传/错传导致 CNY 净值被当成 USD 折算。
+		if !quote.IsFundCNSymbol(symbol) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "中国基金代码为 6 位数字，如 110022"})
+			return
+		}
+		currency = "CNY"
+		assetType = "fund"
 	}
 
 	res, err := h.db.ExecContext(c.Request.Context(),
@@ -82,7 +97,8 @@ func (h *AssetHandler) Create(c *gin.Context) {
 	}
 	id, _ := res.LastInsertId()
 
-	if req.PriceSource == "yahoo" || req.PriceSource == "computed_gold_cny" {
+	switch req.PriceSource {
+	case "yahoo", "computed_gold_cny", "fund_cn":
 		// 回填是 best-effort 后台任务，用 WithoutCancel 脱离请求生命周期。
 		// ctx 必须在请求 goroutine 内 eager 求值：Gin 会把 *gin.Context 归还 sync.Pool
 		// 并被下个请求复用，若在后台 goroutine 内 lazy 读 c.Request 将构成数据竞争 +
