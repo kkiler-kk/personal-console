@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { AdminNav } from "@/components/admin/AdminNav"
 
 const SECTIONS: { value: Section; label: string }[] = [
   { value: "blog", label: "博客" }, { value: "invest", label: "投资" },
@@ -38,6 +39,7 @@ export default function AdminCategories() {
 
   return (
     <div className="max-w-3xl space-y-4">
+      <AdminNav />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">分类管理</h1>
         <Button variant="outline" asChild><Link to="/admin/posts">返回文章</Link></Button>

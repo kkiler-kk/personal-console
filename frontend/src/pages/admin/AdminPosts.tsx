@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Pagination } from "@/components/blog/Pagination"
+import { AdminNav } from "@/components/admin/AdminNav"
 
 export default function AdminPosts() {
   const [page, setPage] = useState(1)
@@ -23,6 +24,7 @@ export default function AdminPosts() {
 
   return (
     <div className="max-w-5xl space-y-4">
+      <AdminNav />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">文章管理</h1>
         <div className="flex gap-2">

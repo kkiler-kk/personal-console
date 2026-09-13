@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Markdown } from "@/components/blog/Markdown"
+import { AdminNav } from "@/components/admin/AdminNav"
 
 export default function PostEditor() {
   const { id } = useParams<{ id: string }>()
@@ -77,6 +78,7 @@ export default function PostEditor() {
 
   return (
     <div className="max-w-3xl space-y-4">
+      <AdminNav />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{editing ? "编辑文章" : "写文章"}</h1>
         <div className="flex gap-2">

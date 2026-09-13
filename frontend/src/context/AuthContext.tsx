@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { toast } from "sonner"
 import { api, ApiError } from "@/lib/api"
 import type { AuthUser } from "@/lib/types"
 
@@ -8,6 +9,8 @@ interface AuthCtx {
   isAdmin: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => void
+  /** 重拉 profile 刷新 user state+localStorage（用于资料保存后同步 Topbar/Dashboard）；纯加法不改既有契约 */
+  refresh: () => Promise<void>
 }
 
 const Ctx = createContext<AuthCtx>(null!)
@@ -54,6 +57,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null); setUser(null)
   }
 
+  // 手动刷新（AdminProfile 保存后调用）：重拉 profile 组 AuthUser 写 state+localStorage，
+  // 驱动 Topbar/Dashboard 即时更新。失败仅 toast 不清会话——401 的清理与跳转由 api 层既有逻辑负责
+  const refresh = async () => {
+    try {
+      const p = await api.getProfile()
+      const u = { id: p.id, username: p.username, nickname: p.nickname, avatar: p.avatar }
+      setUser(u); localStorage.setItem("user", JSON.stringify(u))
+    } catch {
+      toast.error("刷新用户信息失败")
+    }
+  }
+
   // 单用户站点：登录者即管理员（后端“第一个用户是管理员”）
-  return <Ctx.Provider value={{ user, token, isAdmin: !!token, login, logout }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ user, token, isAdmin: !!token, login, logout, refresh }}>{children}</Ctx.Provider>
 }

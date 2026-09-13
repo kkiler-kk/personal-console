@@ -18,8 +18,11 @@ const DEBOUNCE_MS = 250
 // 后端 q 限 1..50 rune，越界必 400：前端同阈值门控，不发起注定失败的请求（brief 可选项，选择门控）
 const MAX_Q = 50
 
-// summary 副标题截 40 字符（JS length 按 UTF-16 code unit 计，CJK 常用字为 1，展示截断足够）
-const truncate = (s: string, max: number) => (s.length > max ? `${s.slice(0, max)}…` : s)
+// summary 副标题截 40 码点（Array.from 按 code point 拆分，代理对/组合字符不会被截半）
+const truncate = (s: string, max: number) => {
+  const chars = Array.from(s)
+  return chars.length > max ? `${chars.slice(0, max).join("")}…` : s
+}
 
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   // ⌘K 快速关/开会打断 radix 退出动画，DialogContent 不卸载（Presence 保留实例）：
@@ -55,7 +58,8 @@ function PaletteBody({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
   const trimmed = debouncedQ.trim()
   const searchActive = trimmed.length >= 1 && trimmed.length <= MAX_Q
   const { data, isFetching, isError } = useQuery({
-    queryKey: ["search", debouncedQ],
+    // queryKey 用 trim 后的值：与 queryFn 的请求参数一致，避免 " x" 与 "x" 各占一份缓存
+    queryKey: ["search", trimmed],
     queryFn: () => api.search(trimmed),
     enabled: searchActive,
   })
