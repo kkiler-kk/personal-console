@@ -9,8 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-// Task 3 同步：constants 迁 i18n（LANG_NAME_KEY/ACTIVITY_KEY）与 formatDuration(minutes, t) 签名变更；
-// 本页其余文案（表头/确认框/toast 等）属 Task 4 admin.* 范围，暂留硬编码
+// Task 3 同步：constants 迁 i18n（LANG_NAME_KEY/ACTIVITY_KEY）与 formatDuration(minutes, t) 签名变更
 import { ACTIVITY_KEY, LANG_NAME_KEY } from "@/pages/learn/constants"
 
 const LIMIT = 100
@@ -28,31 +27,34 @@ export default function AdminSessions() {
   const del = useMutation({
     mutationFn: (id: number) => api.deleteLearnSession(id),
     onSuccess: () => {
-      toast.success("已删除")
+      toast.success(t("admin.toast.deleted"))
       // 明细/统计/日历/Dashboard 今日学习时长同源，一并失效
       qc.invalidateQueries({ queryKey: ["learn-sessions"] })
       qc.invalidateQueries({ queryKey: ["learn-stats"] })
       qc.invalidateQueries({ queryKey: ["learn-calendar"] })
       qc.invalidateQueries({ queryKey: ["dashboard"] })
     },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "删除失败"),
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("admin.toast.deleteFailed")),
   })
+
+  // 语言/时长展示值（表格与删除确认框共用）：白名单外回退原值，惯例同 LearnPage
+  const langLabel = (lang: string) => (LANG_NAME_KEY[lang as keyof typeof LANG_NAME_KEY] ? t(LANG_NAME_KEY[lang as keyof typeof LANG_NAME_KEY]) : lang)
 
   return (
     <div className="max-w-5xl space-y-4">
       <AdminNav />
       <div>
-        <h1 className="text-xl font-semibold">学习记录</h1>
-        <p className="text-sm text-muted-foreground">逐条学习明细，可删除误录</p>
+        <h1 className="text-xl font-semibold">{t("admin.sessions.title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("admin.sessions.desc")}</p>
       </div>
 
       {isPending ? (
         <Skeleton className="h-64 rounded-xl" />
       ) : isError ? (
-        <ErrorState title="加载学习记录失败" message={errorText(error)} onRetry={refetch} />
+        <ErrorState title={t("admin.sessions.loadFailed")} message={errorText(error)} onRetry={refetch} />
       ) : sessions.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          还没有学习记录
+          {t("admin.sessions.empty")}
         </div>
       ) : (
         <>
@@ -60,29 +62,36 @@ export default function AdminSessions() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>日期</TableHead><TableHead>语言</TableHead><TableHead>类型</TableHead>
-                  <TableHead className="tnum">时长</TableHead><TableHead>备注</TableHead><TableHead className="w-20">操作</TableHead>
+                  <TableHead>{t("admin.col.date")}</TableHead><TableHead>{t("admin.col.lang")}</TableHead><TableHead>{t("admin.col.type")}</TableHead>
+                  <TableHead className="tnum">{t("admin.col.duration")}</TableHead><TableHead>{t("admin.col.note")}</TableHead><TableHead className="w-20">{t("admin.col.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sessions.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="tnum text-muted-foreground">{s.session_date.slice(0, 10)}</TableCell>
-                    <TableCell><Badge variant="secondary">{LANG_NAME_KEY[s.lang] ? t(LANG_NAME_KEY[s.lang]) : s.lang}</Badge></TableCell>
+                    <TableCell><Badge variant="secondary">{langLabel(s.lang)}</Badge></TableCell>
                     <TableCell>{ACTIVITY_KEY[s.activity] ? t(ACTIVITY_KEY[s.activity]) : s.activity}</TableCell>
                     <TableCell className="tnum">{formatDuration(s.minutes, t)}</TableCell>
                     <TableCell className="max-w-56 truncate text-muted-foreground">{s.note || "—"}</TableCell>
                     <TableCell>
                       <AlertDialog>
-                        <AlertDialogTrigger asChild><button className="text-sm text-destructive hover:underline">删除</button></AlertDialogTrigger>
+                        <AlertDialogTrigger asChild><button className="text-sm text-destructive hover:underline">{t("common.delete")}</button></AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>删除这条学习记录？</AlertDialogTitle>
-                            <AlertDialogDescription>{s.session_date.slice(0, 10)} · {LANG_NAME_KEY[s.lang] ? t(LANG_NAME_KEY[s.lang]) : s.lang} · {formatDuration(s.minutes, t)}，此操作不可恢复</AlertDialogDescription>
+                            <AlertDialogTitle>{t("admin.sessions.deleteTitle")}</AlertDialogTitle>
+                            {/* 整句插值（不做碎片拼接）：zh「{{date}} · {{lang}} · {{duration}}，此操作不可恢复」逐字保持 */}
+                            <AlertDialogDescription>
+                              {t("admin.sessions.deleteDesc", {
+                                date: s.session_date.slice(0, 10),
+                                lang: langLabel(s.lang),
+                                duration: formatDuration(s.minutes, t),
+                              })}
+                            </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>取消</AlertDialogCancel>
-                            <AlertDialogAction className="bg-destructive/10 text-destructive hover:bg-destructive/20" onClick={() => del.mutate(s.id)}>删除</AlertDialogAction>
+                            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                            <AlertDialogAction className="bg-destructive/10 text-destructive hover:bg-destructive/20" onClick={() => del.mutate(s.id)}>{t("common.delete")}</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -93,7 +102,7 @@ export default function AdminSessions() {
             </Table>
           </div>
           <p className="text-xs text-muted-foreground tnum">
-            {total > LIMIT ? `仅显示最近 ${LIMIT} 条（共 ${total} 条）` : `共 ${total} 条`}
+            {total > LIMIT ? t("admin.sessions.countLimited", { limit: LIMIT, total }) : t("admin.sessions.countTotal", { total })}
           </p>
         </>
       )}

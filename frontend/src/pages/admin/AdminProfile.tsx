@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api, ApiError } from "@/lib/api"
 import type { AuthUser } from "@/lib/types"
@@ -18,6 +19,7 @@ type Profile = AuthUser & { bio: string; created_at: string }
 // 表单以 initial 直接初始化 state（不用 effect 回填）；父组件用 key=dataUpdatedAt 重挂载，
 // 保存后 refetch 触发重挂载即回填最新值——与 HabitDialog/ProfileDialog 的 key-remount 惯例一致
 function ProfileForm({ initial }: { initial: Profile }) {
+  const { t } = useTranslation()
   const { refresh } = useAuth()
   const qc = useQueryClient()
   const [nickname, setNickname] = useState(initial.nickname ?? "")
@@ -31,11 +33,11 @@ function ProfileForm({ initial }: { initial: Profile }) {
       await refresh()
     },
     onSuccess: () => {
-      toast.success("已保存")
+      toast.success(t("admin.toast.saved"))
       qc.invalidateQueries({ queryKey: ["profile"] })
       qc.invalidateQueries({ queryKey: ["dashboard"] })
     },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "保存失败"),
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("common.saveFailed")),
   })
 
   const canSubmit = nickname.trim() !== "" && !save.isPending
@@ -44,30 +46,30 @@ function ProfileForm({ initial }: { initial: Profile }) {
     <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)]">
       <CardContent className="p-5 space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="admin-profile-nickname">昵称（必填）</Label>
+          <Label htmlFor="admin-profile-nickname">{t("admin.profile.nickname")}</Label>
           <Input id="admin-profile-nickname" value={nickname} onChange={(e) => setNickname(e.target.value)}
-            maxLength={50} placeholder="如 Felix" />
+            maxLength={50} placeholder={t("admin.profile.nicknamePlaceholder")} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="admin-profile-avatar">头像 URL</Label>
+          <Label htmlFor="admin-profile-avatar">{t("admin.profile.avatar")}</Label>
           <div className="flex items-center gap-3">
             <Input id="admin-profile-avatar" value={avatar} onChange={(e) => setAvatar(e.target.value)}
               maxLength={500} placeholder="https://…" className="flex-1" />
             {avatar.trim() && (
               // key=src：URL 变更即重挂（display 归零）；onError 隐藏碎图标兜底
               <img key={avatar.trim()} src={avatar.trim()} onError={(e) => { e.currentTarget.style.display = "none" }}
-                className="size-10 shrink-0 rounded-full object-cover" alt="头像预览" />
+                className="size-10 shrink-0 rounded-full object-cover" alt={t("admin.profile.avatarAlt")} />
             )}
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="admin-profile-bio">简介</Label>
+          <Label htmlFor="admin-profile-bio">{t("admin.profile.bio")}</Label>
           <Textarea id="admin-profile-bio" rows={4} value={bio} onChange={(e) => setBio(e.target.value)}
-            maxLength={500} placeholder="一句话介绍自己…" />
+            maxLength={500} placeholder={t("admin.profile.bioPlaceholder")} />
         </div>
         <div className="flex justify-end">
           <Button disabled={!canSubmit} onClick={() => save.mutate()}>
-            {save.isPending ? "保存中…" : "保存"}
+            {save.isPending ? t("common.saving") : t("common.save")}
           </Button>
         </div>
       </CardContent>
@@ -76,6 +78,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
 }
 
 export default function AdminProfile() {
+  const { t } = useTranslation()
   const { data, isPending, isError, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ["profile"],
     queryFn: api.getProfile,
@@ -85,12 +88,12 @@ export default function AdminProfile() {
     <div className="max-w-3xl space-y-4">
       <AdminNav />
       <div>
-        <h1 className="text-xl font-semibold">资料</h1>
-        <p className="text-sm text-muted-foreground">昵称将显示在顶栏与 Dashboard 问候语</p>
+        <h1 className="text-xl font-semibold">{t("admin.profile.title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("admin.profile.desc")}</p>
       </div>
 
       {isError ? (
-        <ErrorState title="加载资料失败" message={errorText(error)} onRetry={refetch} />
+        <ErrorState title={t("admin.profile.loadFailed")} message={errorText(error)} onRetry={refetch} />
       ) : isPending || !data ? (
         <Skeleton className="h-80 rounded-xl" />
       ) : (

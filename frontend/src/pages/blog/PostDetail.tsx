@@ -1,4 +1,5 @@
 import { useParams } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { useQuery } from "@tanstack/react-query"
 import { CalendarDays, Eye } from "lucide-react"
 import { api } from "@/lib/api"
@@ -9,13 +10,14 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function PostDetail() {
+  const { t } = useTranslation()
   const { slug } = useParams<{ slug: string }>()
   const { data: post, isPending, error } = useQuery({
     queryKey: ["post", slug],
     queryFn: () => api.getPost(slug!),
   })
   if (isPending) return <div className="max-w-3xl space-y-4"><Skeleton className="h-10 w-2/3" /><Skeleton className="h-64" /></div>
-  if (error || !post) return <p className="text-muted-foreground">文章不存在</p>
+  if (error || !post) return <p className="text-muted-foreground">{t("blog.notFound")}</p>
 
   return (
     <article className="max-w-3xl">
