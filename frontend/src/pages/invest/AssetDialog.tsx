@@ -71,7 +71,7 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
       if (preset === "ashare") {
         return api.createAsset({
           symbol: symbol.trim().toUpperCase(), name: name.trim(),
-          type: "stock", price_source: "yahoo", currency: "CNY",
+          type, price_source: "yahoo", currency: "CNY",
         })
       }
       if (preset === "us") {
@@ -133,7 +133,7 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
             {preset === "gold" ? (
               <Input id="asset-symbol" value={GOLD_SYMBOL} readOnly className="bg-muted text-muted-foreground" />
             ) : (
-              <Input id="asset-symbol" placeholder={preset === "us" ? "美股如 AAPL；ETF 如 QQQ" : preset === "ashare" ? "600519.SS（沪）/ 000001.SZ（深）" : "自定义代码"}
+              <Input id="asset-symbol" placeholder={preset === "us" ? "美股如 AAPL；ETF 如 QQQ" : preset === "ashare" ? "600519.SS（沪）/ 000001.SZ（深）；ETF 如 510300.SS" : "自定义代码"}
                 value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} />
             )}
           </div>
@@ -147,7 +147,7 @@ export function AssetDialog({ onCreated }: { onCreated?: () => void }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>类型</Label>
-              <Select value={type} onValueChange={(v) => setType(v as AssetType)} disabled={preset === "gold" || preset === "ashare"}>
+              <Select value={type} onValueChange={(v) => setType(v as AssetType)} disabled={preset === "gold"}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(preset === "us" || preset === "ashare" ? US_TYPES : ALL_TYPES).map((t) => (
