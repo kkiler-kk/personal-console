@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { CheckCircle2, Circle, Languages } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
@@ -13,9 +14,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SessionDialog } from "./SessionDialog"
 import { ProfileDialog } from "./ProfileDialog"
 import { StudyCalendar } from "./StudyCalendar"
-import { ACTIVITY_LABELS, LANGS, LANG_META } from "./constants"
+import { ACTIVITY_KEY, LANGS, LANG_FLAG, LANG_NAME_KEY } from "./constants"
 
 export default function LearnPage() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const profilesQ = useQuery({ queryKey: ["learn-profiles"], queryFn: api.getLearnProfiles })
   const statsQ = useQuery({ queryKey: ["learn-stats"], queryFn: api.getLearnStats })
@@ -36,29 +38,29 @@ export default function LearnPage() {
   // 快速打卡：0 分钟 other 记录，仅标记「今天学过」
   const checkin = useMutation({
     mutationFn: (lang: Lang) => api.createLearnSession({ lang, activity: "other", minutes: 0 }),
-    onSuccess: () => { toast.success("已打卡"); invalidateAll() },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "打卡失败"),
+    onSuccess: () => { toast.success(t("learn.checkedIn")); invalidateAll() },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("learn.checkinFailed")),
   })
 
   const todayDone: Record<Lang, boolean> = { en: !!stats?.today.en, es: !!stats?.today.es }
   const profileFor = (lang: Lang) => profiles.find((p) => p.lang === lang)
-  // 今日大数字：formatDuration 输出「<数值> <单位>」按空格拆开，保留单位小字的视觉层级
-  const [todayNum, todayUnit] = (stats ? formatDuration(stats.today.minutes) : "").split(" ")
+  // 今日大数字：formatDuration 输出「<数值> <单位>」按空格拆开，保留单位小字的视觉层级（三语同构：单位词恒为第二段）
+  const [todayNum, todayUnit] = (stats ? formatDuration(stats.today.minutes, t) : "").split(" ")
 
   return (
     <div className="max-w-6xl space-y-5">
       {/* 主按钮放页头行：不依赖 stats，错误态下仍可记录学习 */}
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold flex items-center gap-2"><Languages className="size-5" /> 学习</h1>
+        <h1 className="text-xl font-semibold flex items-center gap-2"><Languages className="size-5" /> {t("nav.learn")}</h1>
         <SessionDialog onSaved={invalidateAll} />
       </div>
 
       {statsQ.isError && (
-        <p className="text-sm text-destructive">加载学习统计失败：{statsQ.error instanceof Error ? statsQ.error.message : "未知错误"}</p>
+        <p className="text-sm text-destructive">{t("learn.statsFailed", { msg: statsQ.error instanceof Error ? statsQ.error.message : t("errors.unknown") })}</p>
       )}
       {/* profilesQ 失败也要出声（task 4.5）：语言卡会静默渲染成「未设置」，易误判为无档案 */}
       {profilesQ.isError && (
-        <p className="text-sm text-destructive">加载语言档案失败：{profilesQ.error instanceof Error ? profilesQ.error.message : "未知错误"}</p>
+        <p className="text-sm text-destructive">{t("learn.profilesFailed", { msg: profilesQ.error instanceof Error ? profilesQ.error.message : t("errors.unknown") })}</p>
       )}
 
       {/* streak 横幅（三分支：isError 时不渲染，骨架不卡死） */}
@@ -68,15 +70,15 @@ export default function LearnPage() {
         <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)]">
           <CardContent className="p-5 flex flex-wrap items-center gap-x-5 gap-y-3">
             <div>
-              <p className="text-sm text-muted-foreground">连续学习</p>
+              <p className="text-sm text-muted-foreground">{t("learn.streak")}</p>
               <p className="text-4xl font-semibold tnum mt-0.5">
-                {stats.streak}<span className="text-base font-normal text-muted-foreground ml-1">天</span>
+                {stats.streak}<span className="text-base font-normal text-muted-foreground ml-1">{t("common.days", { count: stats.streak })}</span>
               </p>
             </div>
             <Separator orientation="vertical" className="hidden sm:block h-12" />
             <div className="text-sm text-muted-foreground space-y-1">
-              <p className="tnum">本周 <span className="font-medium text-foreground">{formatDuration(stats.week.minutes)}</span> · {stats.week.days} 天</p>
-              <p className="tnum">累计 <span className="font-medium text-foreground">{formatDuration(stats.total.minutes)}</span> · {stats.total.days} 天</p>
+              <p className="tnum">{t("learn.weekLabel")} <span className="font-medium text-foreground">{formatDuration(stats.week.minutes, t)}</span> · {stats.week.days} {t("common.days", { count: stats.week.days })}</p>
+              <p className="tnum">{t("learn.totalLabel")} <span className="font-medium text-foreground">{formatDuration(stats.total.minutes, t)}</span> · {stats.total.days} {t("common.days", { count: stats.total.days })}</p>
             </div>
           </CardContent>
         </Card>
@@ -87,7 +89,7 @@ export default function LearnPage() {
         <Skeleton className="h-36 rounded-xl" />
       ) : stats ? (
         <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)]">
-          <CardHeader><CardTitle className="text-base">今日学习</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("learn.todayTitle")}</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
               <p className="text-3xl font-semibold tnum">
@@ -95,27 +97,27 @@ export default function LearnPage() {
               </p>
               <div className="flex items-center gap-3 text-sm">
                 {LANGS.map((lang) => (
-                  <span key={lang} className="flex items-center gap-1" title={todayDone[lang] ? "今日已学" : "今日未学"}>
+                  <span key={lang} className="flex items-center gap-1" title={todayDone[lang] ? t("learn.studiedToday") : t("learn.notStudiedToday")}>
                     {todayDone[lang]
                       ? <CheckCircle2 className="size-4 text-primary" />
                       : <Circle className="size-4 text-muted-foreground/40" />}
-                    {LANG_META[lang].flag} {LANG_META[lang].name}
+                    {LANG_FLAG[lang]} {t(LANG_NAME_KEY[lang])}
                   </span>
                 ))}
               </div>
             </div>
             {stats.today.by_activity.length === 0 ? (
-              <p className="text-sm text-muted-foreground">今天还没有学习记录，点上方「记录学习」开始</p>
+              <p className="text-sm text-muted-foreground">{t("learn.todayEmpty")}</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {stats.today.by_activity.map((a) => (
                   <Badge key={a.activity} variant="secondary" className="tnum font-normal">
-                    {ACTIVITY_LABELS[a.activity] ?? a.activity} · {formatDuration(a.minutes)}
+                    {ACTIVITY_KEY[a.activity] ? t(ACTIVITY_KEY[a.activity]) : a.activity} · {formatDuration(a.minutes, t)}
                   </Badge>
                 ))}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">逐条明细与删除入口将在后续迭代提供</p>
+            <p className="text-xs text-muted-foreground">{t("learn.detailNote")}</p>
           </CardContent>
         </Card>
       ) : null}
@@ -130,12 +132,12 @@ export default function LearnPage() {
               <CardContent className="p-5 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-2xl leading-none">{LANG_META[lang].flag}</span>
+                    <span className="text-2xl leading-none">{LANG_FLAG[lang]}</span>
                     <div className="min-w-0">
-                      <p className="font-medium">{LANG_META[lang].name}</p>
+                      <p className="font-medium">{t(LANG_NAME_KEY[lang])}</p>
                       {p?.level
                         ? <Badge variant="secondary" className="mt-0.5 font-normal">{p.level}</Badge>
-                        : <span className="text-xs text-muted-foreground">未设置</span>}
+                        : <span className="text-xs text-muted-foreground">{t("learn.levelNotSet")}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -143,17 +145,17 @@ export default function LearnPage() {
                     <Button size="sm" variant={todayDone[lang] ? "outline" : "default"}
                       disabled={todayDone[lang] || checkin.isPending}
                       onClick={() => checkin.mutate(lang)}>
-                      {todayDone[lang] ? "已打卡 ✓" : "快速打卡"}
+                      {todayDone[lang] ? `${t("learn.checkedIn")} ✓` : t("learn.quickCheckin")}
                     </Button>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground line-clamp-2 min-h-10">
                   {p?.goal || p?.note
                     ? [p?.goal, p?.note].filter(Boolean).join(" · ")
-                    : "还没有目标与备注，点「编辑」设置"}
+                    : t("learn.noGoalNote")}
                 </p>
                 <p className="text-xs text-muted-foreground tnum">
-                  累计 {formatDuration(byLang?.minutes ?? 0)} · {byLang?.days ?? 0} 天
+                  {t("learn.totalLabel")} {formatDuration(byLang?.minutes ?? 0, t)} · {byLang?.days ?? 0} {t("common.days", { count: byLang?.days ?? 0 })}
                 </p>
               </CardContent>
             </Card>
@@ -164,19 +166,19 @@ export default function LearnPage() {
       {/* 近 28 天柱状图（三分支：错误态整体不渲染） */}
       {statsQ.isPending ? (
         <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)]">
-          <CardHeader><CardTitle className="text-base">近 28 天学习时长</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("learn.recentChart")}</CardTitle></CardHeader>
           <CardContent><Skeleton className="h-[180px] rounded-lg" /></CardContent>
         </Card>
       ) : stats ? (
         <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)]">
-          <CardHeader><CardTitle className="text-base">近 28 天学习时长</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("learn.recentChart")}</CardTitle></CardHeader>
           <CardContent><MinutesBar data={stats.recent} /></CardContent>
         </Card>
       ) : null}
 
       {/* 年度日历 */}
       <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)]">
-        <CardHeader><CardTitle className="text-base">学习日历</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("learn.calendarTitle")}</CardTitle></CardHeader>
         <CardContent>
           <StudyCalendar />
         </CardContent>

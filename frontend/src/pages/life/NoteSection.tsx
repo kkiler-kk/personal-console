@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { Trash2 } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
@@ -12,9 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
-const MISSING_CATEGORY_HINT = "随手记分类缺失，请在分类管理中创建 slug=notes 的分类"
-
 export function NoteSection() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const catsQ = useQuery({ queryKey: ["categories"], queryFn: api.getCategories })
   // ["notes"] = getPosts(category:notes) 的专用键（与 ["posts", ...] 分页列表键隔离）
@@ -39,16 +39,16 @@ export function NoteSection() {
       return api.createPost({ title, content: body, category_id: notesCat?.id, status: "published" })
     },
     onSuccess: () => {
-      toast.success("已记录")
+      toast.success(t("life.note.created"))
       setContent("")
       invalidateNotes()
     },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "发布失败"),
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("life.note.publishFailed")),
   })
   const del = useMutation({
     mutationFn: (id: number) => api.deletePost(id),
-    onSuccess: () => { toast.success("已删除"); invalidateNotes() },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "删除失败"),
+    onSuccess: () => { toast.success(t("life.deleted")); invalidateNotes() },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("life.deleteFailed")),
   })
 
   // 种子分类被删的优雅降级：找不到 slug=notes → 输入框禁用 + 提示
@@ -58,16 +58,16 @@ export function NoteSection() {
   return (
     <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)]">
       <CardHeader>
-        <CardTitle>随手记</CardTitle>
+        <CardTitle>{t("life.note.title")}</CardTitle>
         <CardAction>
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/blog/category/notes">查看更多</Link>
+            <Link to="/blog/category/notes">{t("life.note.viewMore")}</Link>
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-4">
         {catsQ.isError ? (
-          <ErrorState title="加载分类失败" message={errorText(catsQ.error)} onRetry={() => catsQ.refetch()} />
+          <ErrorState title={t("life.note.categoriesFailed")} message={errorText(catsQ.error)} onRetry={() => catsQ.refetch()} />
         ) : catsQ.isPending ? (
           <Skeleton className="h-[76px] rounded-lg" />
         ) : notesCat ? (
@@ -75,25 +75,25 @@ export function NoteSection() {
             <Textarea rows={2} value={content} maxLength={2000}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit() }}
-              placeholder="想到什么记一笔…（Ctrl+Enter 快速提交）" className="min-h-16 flex-1" />
-            <Button disabled={!canSubmit} onClick={submit}>{create.isPending ? "记录中…" : "记一笔"}</Button>
+              placeholder={t("life.note.placeholder")} className="min-h-16 flex-1" />
+            <Button disabled={!canSubmit} onClick={submit}>{create.isPending ? t("life.note.submitting") : t("life.note.submit")}</Button>
           </div>
         ) : (
           <div className="space-y-1.5">
             <div className="flex items-start gap-2">
-              <Textarea rows={2} disabled placeholder={MISSING_CATEGORY_HINT} className="min-h-16 flex-1" />
-              <Button disabled>记一笔</Button>
+              <Textarea rows={2} disabled placeholder={t("life.note.missingCategory")} className="min-h-16 flex-1" />
+              <Button disabled>{t("life.note.submit")}</Button>
             </div>
-            <p className="text-xs text-muted-foreground">{MISSING_CATEGORY_HINT}</p>
+            <p className="text-xs text-muted-foreground">{t("life.note.missingCategory")}</p>
           </div>
         )}
 
         {notesQ.isError ? (
-          <ErrorState title="加载随手记失败" message={errorText(notesQ.error)} onRetry={() => notesQ.refetch()} />
+          <ErrorState title={t("life.note.loadFailed")} message={errorText(notesQ.error)} onRetry={() => notesQ.refetch()} />
         ) : notesQ.isPending ? (
           <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
         ) : notes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">还没有随手记，在上面记第一笔</p>
+          <p className="text-sm text-muted-foreground">{t("life.note.empty")}</p>
         ) : (
           <div className="space-y-2">
             {notes.map((p) => (
@@ -104,18 +104,18 @@ export function NoteSection() {
                 </div>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon-sm" aria-label="删除随手记" className="text-muted-foreground hover:text-destructive">
+                    <Button variant="ghost" size="icon-sm" aria-label={t("life.note.deleteAria")} className="text-muted-foreground hover:text-destructive">
                       <Trash2 className="size-4" />
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>删除这条随手记？</AlertDialogTitle>
-                      <AlertDialogDescription>删除后无法恢复</AlertDialogDescription>
+                      <AlertDialogTitle>{t("life.note.confirmTitle")}</AlertDialogTitle>
+                      <AlertDialogDescription>{t("life.note.confirmDesc")}</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>取消</AlertDialogCancel>
-                      <AlertDialogAction className="bg-destructive/10 text-destructive hover:bg-destructive/20" onClick={() => del.mutate(p.id)}>删除</AlertDialogAction>
+                      <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                      <AlertDialogAction className="bg-destructive/10 text-destructive hover:bg-destructive/20" onClick={() => del.mutate(p.id)}>{t("common.delete")}</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>

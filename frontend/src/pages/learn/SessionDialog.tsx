@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react"
 import { useMutation } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { Plus } from "lucide-react"
@@ -10,14 +11,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { ACTIVITY_LABELS, LANGS, LANG_META } from "./constants"
+import { ACTIVITY_KEY, LANGS, LANG_FLAG, LANG_NAME_KEY } from "./constants"
 
 const MINUTE_PRESETS = [15, 30, 60, 90]
 // minutes 上限与后端 binding lte=14400 对齐（task 4.5）
 const MINUTES_MAX = 14400
-const ACTIVITY_OPTIONS = Object.entries(ACTIVITY_LABELS) as [ActivityType, string][]
+const ACTIVITY_OPTIONS = Object.entries(ACTIVITY_KEY) as [ActivityType, string][]
 
 export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trigger?: ReactNode }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [lang, setLang] = useState<Lang>("en")
   const [activity, setActivity] = useState<ActivityType>("vocab")
@@ -40,10 +42,10 @@ export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trig
       note: note.trim() || undefined,
     }),
     onSuccess: () => {
-      toast.success("已记录学习")
+      toast.success(t("learn.sessionCreated"))
       setOpen(false); onSaved?.()
     },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "提交失败"),
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("learn.sessionFailed")),
   })
 
   const m = Number(minutes)
@@ -57,34 +59,34 @@ export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trig
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) reset() }}>
       <DialogTrigger asChild>
-        {trigger ?? <Button><Plus className="size-4" /> 记录学习</Button>}
+        {trigger ?? <Button><Plus className="size-4" /> {t("learn.record")}</Button>}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>记录学习</DialogTitle>
-          <DialogDescription>记一笔学习时长，连续天数与统计将自动更新</DialogDescription>
+          <DialogTitle>{t("learn.record")}</DialogTitle>
+          <DialogDescription>{t("learn.sessionDesc")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="session-lang">语言</Label>
+              <Label htmlFor="session-lang">{t("learn.formLang")}</Label>
               <Select value={lang} onValueChange={(v) => setLang(v as Lang)}>
                 <SelectTrigger id="session-lang" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {LANGS.map((l) => (
-                    <SelectItem key={l} value={l}>{LANG_META[l].flag} {LANG_META[l].name}</SelectItem>
+                    <SelectItem key={l} value={l}>{LANG_FLAG[l]} {t(LANG_NAME_KEY[l])}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="session-activity">类型</Label>
+              <Label htmlFor="session-activity">{t("learn.formActivity")}</Label>
               <Select value={activity} onValueChange={(v) => setActivity(v as ActivityType)}>
                 <SelectTrigger id="session-activity" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ACTIVITY_OPTIONS.map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  {ACTIVITY_OPTIONS.map(([value, labelKey]) => (
+                    <SelectItem key={value} value={value}>{t(labelKey)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -92,35 +94,35 @@ export function SessionDialog({ onSaved, trigger }: { onSaved?: () => void; trig
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="session-minutes">分钟</Label>
+            <Label htmlFor="session-minutes">{t("learn.formMinutes")}</Label>
             <Input id="session-minutes" type="number" min="0" max={MINUTES_MAX} step="1" inputMode="numeric"
-              value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="如 30" />
+              value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder={t("learn.minutesPlaceholder")} />
             <div className="flex gap-1.5 pt-1">
               {MINUTE_PRESETS.map((p) => (
                 <Button key={p} type="button" size="xs" variant={minutes === String(p) ? "secondary" : "outline"}
                   className="tnum" onClick={() => setMinutes(String(p))}>
-                  {p} 分钟
+                  {p} {t("common.minutes", { count: p })}
                 </Button>
               ))}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="session-date">日期</Label>
+            <Label htmlFor="session-date">{t("learn.formDate")}</Label>
             {/* max=今天（task 4.5）：原生日期选择器禁选未来，与后端 400 双保险 */}
             <Input id="session-date" type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="session-note">备注</Label>
-            <Input id="session-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="可选，如「精听 BBC 6 Minute」" maxLength={200} />
+            <Label htmlFor="session-note">{t("learn.formNote")}</Label>
+            <Input id="session-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("learn.notePlaceholder")} maxLength={200} />
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+          <Button variant="ghost" onClick={() => setOpen(false)}>{t("common.cancel")}</Button>
           <Button disabled={!canSubmit} onClick={() => create.mutate()}>
-            {create.isPending ? "提交中…" : "保存"}
+            {create.isPending ? t("common.submitting") : t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

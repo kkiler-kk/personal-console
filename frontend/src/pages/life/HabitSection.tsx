@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { Archive, Check, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
@@ -22,10 +23,11 @@ const DEFAULT_COLOR = COLORS[0]
 // 当日打卡状态完全由服务端驱动（task 4.5）：GET /api/habits 行携带 checked_today，
 // mutation 成功后 invalidate ["habits"] 闭环刷新——不再有 localStorage hack。
 
+// 三类确认框文案键（title 插值 {{name}}；action 复用 common/life 既有键）
 const CONFIRM_META = {
-  uncheck: { title: (n: string) => `撤销「${n}」今日打卡？`, desc: "今日统计与热力图将同步更新", action: "撤销" },
-  archive: { title: (n: string) => `归档习惯「${n}」？`, desc: "归档后不再出现在打卡列表，历史打卡记录保留", action: "归档" },
-  delete: { title: (n: string) => `删除习惯「${n}」？`, desc: "该习惯的全部打卡记录将一并删除，无法恢复", action: "删除" },
+  uncheck: { titleKey: "life.habit.confirmUncheckTitle", descKey: "life.habit.confirmUncheckDesc", actionKey: "common.undo" },
+  archive: { titleKey: "life.habit.confirmArchiveTitle", descKey: "life.habit.confirmArchiveDesc", actionKey: "life.habit.archive" },
+  delete: { titleKey: "life.habit.confirmDeleteTitle", descKey: "life.habit.confirmDeleteDesc", actionKey: "common.delete" },
 } as const
 
 type ConfirmKind = keyof typeof CONFIRM_META
@@ -36,6 +38,7 @@ function HabitDialog({ open, onOpenChange, habit, onSaved }: {
   habit: Habit | null // null = 新建
   onSaved: () => void
 }) {
+  const { t } = useTranslation()
   // 父组件每次打开递增 key → 重挂载即重置/回填（open 时重置惯例；程序化 open 不触发 onOpenChange，故不走 fill 模式）
   const [name, setName] = useState(habit?.name ?? "")
   const [icon, setIcon] = useState(habit?.icon ?? "")
@@ -48,10 +51,10 @@ function HabitDialog({ open, onOpenChange, habit, onSaved }: {
       else await api.createHabit({ name: name.trim(), icon: icon.trim() || undefined, color })
     },
     onSuccess: () => {
-      toast.success(habit ? "已更新" : "已创建")
+      toast.success(habit ? t("life.habit.updated") : t("life.habit.created"))
       onOpenChange(false); onSaved()
     },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "保存失败"),
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("common.saveFailed")),
   })
 
   const canSubmit = name.trim() !== "" && name.trim().length <= 50 && !save.isPending
@@ -60,23 +63,23 @@ function HabitDialog({ open, onOpenChange, habit, onSaved }: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{habit ? "编辑习惯" : "新习惯"}</DialogTitle>
-          <DialogDescription>{habit ? "调整名称、图标与颜色" : "创建一个习惯，从今天开始打卡"}</DialogDescription>
+          <DialogTitle>{habit ? t("life.habit.editTitle") : t("life.habit.new")}</DialogTitle>
+          <DialogDescription>{habit ? t("life.habit.editDesc") : t("life.habit.newDesc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-1">
           <div className="space-y-1.5">
-            <Label htmlFor="habit-name">名称</Label>
-            <Input id="habit-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={50} placeholder="如 早睡、阅读 30 分钟" />
+            <Label htmlFor="habit-name">{t("life.habit.name")}</Label>
+            <Input id="habit-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={50} placeholder={t("life.habit.namePlaceholder")} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="habit-icon">图标（emoji，可选）</Label>
-            <Input id="habit-icon" value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={16} placeholder="如 🌙" className="w-28" />
+            <Label htmlFor="habit-icon">{t("life.habit.iconLabel")}</Label>
+            <Input id="habit-icon" value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={16} placeholder={t("life.habit.iconPlaceholder")} className="w-28" />
           </div>
           <div className="space-y-1.5">
-            <Label>颜色</Label>
+            <Label>{t("life.habit.colorLabel")}</Label>
             <div className="flex gap-2 pt-0.5">
               {COLORS.map((c) => (
-                <button key={c} type="button" title={c} aria-label={`颜色 ${c}`} onClick={() => setColor(c)}
+                <button key={c} type="button" title={c} aria-label={t("life.habit.colorAria", { color: c })} onClick={() => setColor(c)}
                   className={`size-6 rounded-full transition-transform ${color === c ? "ring-2 ring-foreground ring-offset-2 ring-offset-background" : "hover:scale-110"}`}
                   style={{ backgroundColor: c }} />
               ))}
@@ -84,9 +87,9 @@ function HabitDialog({ open, onOpenChange, habit, onSaved }: {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button disabled={!canSubmit} onClick={() => save.mutate()}>
-            {save.isPending ? "保存中…" : "保存"}
+            {save.isPending ? t("common.saving") : t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -95,6 +98,7 @@ function HabitDialog({ open, onOpenChange, habit, onSaved }: {
 }
 
 export function HabitSection() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const [year, setYear] = useState(() => new Date().getFullYear())
   // 默认 List（不传 all）：归档习惯自然过滤（4.2 交接结论）；行含 checked_today（task 4.5）
@@ -111,30 +115,30 @@ export function HabitSection() {
 
   const check = useMutation({
     mutationFn: (id: number) => api.checkHabit(id),
-    onSuccess: () => { toast.success("已打卡"); invalidateAll() },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "打卡失败"),
+    onSuccess: () => { toast.success(t("life.habit.toastChecked")); invalidateAll() },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("life.habit.checkinFailed")),
   })
   const uncheck = useMutation({
     mutationFn: (id: number) => api.uncheckHabit(id),
-    onSuccess: () => { toast.success("已撤销打卡"); invalidateAll() },
+    onSuccess: () => { toast.success(t("life.habit.toastUnchecked")); invalidateAll() },
     onError: (e: unknown) => {
       if (e instanceof ApiError && e.status === 404) {
         // 服务端本就无该记录（状态漂移）→ invalidate ["habits"] 拉齐服务端真值，视为撤销成功
-        invalidateAll(); toast.success("已撤销打卡")
+        invalidateAll(); toast.success(t("life.habit.toastUnchecked"))
       } else {
-        toast.error(e instanceof ApiError ? e.message : "撤销失败")
+        toast.error(e instanceof ApiError ? e.message : t("life.habit.uncheckFailed"))
       }
     },
   })
   const archive = useMutation({
     mutationFn: (id: number) => api.updateHabit(id, { archived: true }),
-    onSuccess: () => { toast.success("已归档"); invalidateAll() },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "归档失败"),
+    onSuccess: () => { toast.success(t("life.habit.toastArchived")); invalidateAll() },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("life.habit.archiveFailed")),
   })
   const del = useMutation({
     mutationFn: (id: number) => api.deleteHabit(id),
-    onSuccess: () => { toast.success("已删除"); invalidateAll() },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "删除失败"),
+    onSuccess: () => { toast.success(t("life.deleted")); invalidateAll() },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("life.deleteFailed")),
   })
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -161,20 +165,20 @@ export function HabitSection() {
     <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)]">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          习惯打卡
-          <span className="text-xs font-normal text-muted-foreground tnum">今日 {checkedToday}/{totalToday}</span>
+          {t("life.habit.title")}
+          <span className="text-xs font-normal text-muted-foreground tnum">{t("life.habit.todayCount", { done: checkedToday, total: totalToday })}</span>
         </CardTitle>
         <CardAction>
-          <Button size="sm" onClick={() => openDialog(null)}><Plus className="size-4" /> 新习惯</Button>
+          <Button size="sm" onClick={() => openDialog(null)}><Plus className="size-4" /> {t("life.habit.new")}</Button>
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-4">
         {habitsQ.isError ? (
-          <ErrorState title="加载习惯失败" message={errorText(habitsQ.error)} onRetry={() => habitsQ.refetch()} />
+          <ErrorState title={t("life.habit.loadFailed")} message={errorText(habitsQ.error)} onRetry={() => habitsQ.refetch()} />
         ) : habitsQ.isPending ? (
           <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[52px] rounded-lg" />)}</div>
         ) : habits.length === 0 ? (
-          <p className="text-sm text-muted-foreground">还没有习惯，点右上角「新习惯」创建第一个</p>
+          <p className="text-sm text-muted-foreground">{t("life.habit.empty")}</p>
         ) : (
           <div className="space-y-2">
             {habits.map((h) => {
@@ -190,24 +194,24 @@ export function HabitSection() {
                     <Button size="sm" variant="outline" disabled={uncheck.isPending}
                       className="border-green-500/40 bg-green-500/10 text-green-600 hover:bg-green-500/20 hover:text-green-700 dark:text-green-500"
                       onClick={() => setConfirm({ kind: "uncheck", habit: h })}>
-                      <Check className="size-4" /> 已打卡
+                      <Check className="size-4" /> {t("life.habit.checkedIn")}
                     </Button>
                   ) : (
-                    <Button size="sm" disabled={check.isPending} onClick={() => check.mutate(h.id)}>打卡</Button>
+                    <Button size="sm" disabled={check.isPending} onClick={() => check.mutate(h.id)}>{t("life.habit.checkin")}</Button>
                   )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm" aria-label={`管理 ${h.name}`}><MoreHorizontal className="size-4" /></Button>
+                      <Button variant="ghost" size="icon-sm" aria-label={t("life.habit.manageAria", { name: h.name })}><MoreHorizontal className="size-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => openDialog(h)}>
-                        <Pencil className="size-4" /> 编辑
+                        <Pencil className="size-4" /> {t("common.edit")}
                       </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => setConfirm({ kind: "archive", habit: h })}>
-                        <Archive className="size-4" /> 归档
+                        <Archive className="size-4" /> {t("life.habit.archive")}
                       </DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" onSelect={() => setConfirm({ kind: "delete", habit: h })}>
-                        <Trash2 className="size-4" /> 删除
+                        <Trash2 className="size-4" /> {t("common.delete")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -219,7 +223,7 @@ export function HabitSection() {
 
         {/* 年度热力图（三分支：骨架 / 统一错误态不卡死 / 正常渲染） */}
         {heatmapQ.isError ? (
-          <ErrorState title="加载热力图失败" message={errorText(heatmapQ.error)} onRetry={() => heatmapQ.refetch()} />
+          <ErrorState title={t("life.habit.heatmapFailed")} message={errorText(heatmapQ.error)} onRetry={() => heatmapQ.refetch()} />
         ) : heatmapQ.isPending ? (
           <Skeleton className="h-32 rounded-lg" />
         ) : (
@@ -233,15 +237,15 @@ export function HabitSection() {
         <AlertDialog open onOpenChange={(o) => { if (!o) setConfirm(null) }}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>{CONFIRM_META[confirm.kind].title(confirm.habit.name)}</AlertDialogTitle>
-              <AlertDialogDescription>{CONFIRM_META[confirm.kind].desc}</AlertDialogDescription>
+              <AlertDialogTitle>{t(CONFIRM_META[confirm.kind].titleKey, { name: confirm.habit.name })}</AlertDialogTitle>
+              <AlertDialogDescription>{t(CONFIRM_META[confirm.kind].descKey)}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
               <AlertDialogAction
                 className={confirm.kind === "delete" ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : ""}
                 onClick={() => runConfirm(confirm)}>
-                {CONFIRM_META[confirm.kind].action}
+                {t(CONFIRM_META[confirm.kind].actionKey)}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -105,7 +105,7 @@ export default function Dashboard() {
                 </Button>
               } />
             <StatCard title={t("dashboard.todayStudy")}
-              value={data.study_minutes_today ? formatDuration(data.study_minutes_today) : "—"}
+              value={data.study_minutes_today ? formatDuration(data.study_minutes_today, t) : "—"}
               sub={data.learn_streak > 0 ? t("dashboard.streakDays", { n: data.learn_streak }) : t("dashboard.noStudyToday")}
               icon={Languages} href="/learn" />
             <StatCard title={t("dashboard.habitCheckin")}

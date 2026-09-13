@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api, ApiError } from "@/lib/api"
 import { formatDuration } from "@/lib/duration"
@@ -8,11 +9,14 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { ACTIVITY_LABELS, LANG_META } from "@/pages/learn/constants"
+// Task 3 同步：constants 迁 i18n（LANG_NAME_KEY/ACTIVITY_KEY）与 formatDuration(minutes, t) 签名变更；
+// 本页其余文案（表头/确认框/toast 等）属 Task 4 admin.* 范围，暂留硬编码
+import { ACTIVITY_KEY, LANG_NAME_KEY } from "@/pages/learn/constants"
 
 const LIMIT = 100
 
 export default function AdminSessions() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ["learn-sessions", LIMIT],
@@ -64,9 +68,9 @@ export default function AdminSessions() {
                 {sessions.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="tnum text-muted-foreground">{s.session_date.slice(0, 10)}</TableCell>
-                    <TableCell><Badge variant="secondary">{LANG_META[s.lang]?.name ?? s.lang}</Badge></TableCell>
-                    <TableCell>{ACTIVITY_LABELS[s.activity] ?? s.activity}</TableCell>
-                    <TableCell className="tnum">{formatDuration(s.minutes)}</TableCell>
+                    <TableCell><Badge variant="secondary">{LANG_NAME_KEY[s.lang] ? t(LANG_NAME_KEY[s.lang]) : s.lang}</Badge></TableCell>
+                    <TableCell>{ACTIVITY_KEY[s.activity] ? t(ACTIVITY_KEY[s.activity]) : s.activity}</TableCell>
+                    <TableCell className="tnum">{formatDuration(s.minutes, t)}</TableCell>
                     <TableCell className="max-w-56 truncate text-muted-foreground">{s.note || "—"}</TableCell>
                     <TableCell>
                       <AlertDialog>
@@ -74,7 +78,7 @@ export default function AdminSessions() {
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>删除这条学习记录？</AlertDialogTitle>
-                            <AlertDialogDescription>{s.session_date.slice(0, 10)} · {LANG_META[s.lang]?.name ?? s.lang} · {formatDuration(s.minutes)}，此操作不可恢复</AlertDialogDescription>
+                            <AlertDialogDescription>{s.session_date.slice(0, 10)} · {LANG_NAME_KEY[s.lang] ? t(LANG_NAME_KEY[s.lang]) : s.lang} · {formatDuration(s.minutes, t)}，此操作不可恢复</AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>取消</AlertDialogCancel>

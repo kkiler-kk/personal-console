@@ -1,5 +1,7 @@
 import { useMemo } from "react"
 import { format } from "date-fns"
+import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { HeatmapDay } from "@/lib/types"
 import { compactWindowStart } from "@/lib/dates"
@@ -55,8 +57,8 @@ function buildCompactWeeks(): (string | null)[][] {
   return weeks
 }
 
-/** 月份标签：某月首次出现的周列打标（月首在周中也能落在正确列） */
-function monthLabels(weeks: (string | null)[][]): (string | undefined)[] {
+/** 月份标签：某月首次出现的周列打标（月首在周中也能落在正确列）；月份名走 common.months.*（与 StudyCalendar 同源） */
+function monthLabels(weeks: (string | null)[][], t: TFunction): (string | undefined)[] {
   const labels: (string | undefined)[] = []
   let prev = 0
   for (const week of weeks) {
@@ -64,7 +66,7 @@ function monthLabels(weeks: (string | null)[][]): (string | undefined)[] {
     for (const cell of week) {
       if (!cell) continue
       const m = Number(cell.slice(5, 7))
-      if (m !== prev) { label = `${m}月`; prev = m }
+      if (m !== prev) { label = t(`common.months.m${m}`); prev = m }
     }
     labels.push(label)
   }
@@ -72,13 +74,15 @@ function monthLabels(weeks: (string | null)[][]): (string | undefined)[] {
 }
 
 export function HabitHeatmap({ days, year, onYearChange, compact = false }: HabitHeatmapProps) {
+  const { t } = useTranslation()
   const dayMap = useMemo(
     () => new Map(days.map((d) => [d.date, d.count])),
     // 依赖 days 引用而非派生数组：react-query 结构共享保证引用稳定
     [days],
   )
   const weeks = useMemo(() => (compact ? buildCompactWeeks() : buildYearWeeks(year)), [compact, year])
-  const labels = useMemo(() => (compact ? [] : monthLabels(weeks)), [compact, weeks])
+  // t 入依赖：语言切换时月份标签随当前语言重算
+  const labels = useMemo(() => (compact ? [] : monthLabels(weeks, t)), [compact, weeks, t])
   const todayKey = dateKey(new Date())
 
   const px = compact ? 8 : 11
@@ -89,11 +93,11 @@ export function HabitHeatmap({ days, year, onYearChange, compact = false }: Habi
     <div className="space-y-2">
       {onYearChange && !compact && (
         <div className="flex items-center justify-between">
-          <Button variant="ghost" size="icon-sm" title="上一年" disabled={year <= MIN_YEAR} onClick={() => onYearChange(year - 1)}>
+          <Button variant="ghost" size="icon-sm" title={t("common.prevYear")} disabled={year <= MIN_YEAR} onClick={() => onYearChange(year - 1)}>
             <ChevronLeft className="size-4" />
           </Button>
-          <span className="text-sm font-medium tnum">{year} 年</span>
-          <Button variant="ghost" size="icon-sm" title="下一年" disabled={year >= MAX_YEAR} onClick={() => onYearChange(year + 1)}>
+          <span className="text-sm font-medium tnum">{t("common.yearLabel", { year })}</span>
+          <Button variant="ghost" size="icon-sm" title={t("common.nextYear")} disabled={year >= MAX_YEAR} onClick={() => onYearChange(year + 1)}>
             <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -115,7 +119,7 @@ export function HabitHeatmap({ days, year, onYearChange, compact = false }: Habi
                 if (!date) return <div key={`pad-${w}-${r}`} />
                 const count = dayMap.get(date) ?? 0
                 return (
-                  <div key={date} title={`${date} · ${count} 个习惯`}
+                  <div key={date} title={t("life.heatmap.cellTitle", { date, count })}
                     className={`${radius} ${tierCls(count)} ${date === todayKey ? "ring-1 ring-primary" : ""}`} />
                 )
               }),
@@ -126,11 +130,11 @@ export function HabitHeatmap({ days, year, onYearChange, compact = false }: Habi
 
       {!compact && (
         <div className="flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground">
-          少
+          {t("common.less")}
           {[0, 1, 2, 3].map((n) => (
             <span key={n} className={`size-2.5 rounded-[3px] ${tierCls(n)} ${n === 0 ? "border border-border/50" : ""}`} />
           ))}
-          多
+          {t("common.more")}
         </div>
       )}
     </div>
