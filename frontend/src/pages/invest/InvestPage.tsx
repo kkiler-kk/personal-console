@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Wallet, TrendingUp, Activity, Layers, Plus, Pencil, Trash2 } from "lucide-react"
+import { Wallet, TrendingUp, Activity, Layers, Plus, Pencil, Trash2, Eye, EyeOff } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import type { Asset, AssetType } from "@/lib/types"
 import { formatMoney, formatDate, formatDateTime } from "@/lib/format"
+import { MASK, maskValue, useInvestMask } from "@/lib/mask"
 import { StatCard } from "@/components/StatCard"
 import { ErrorState, errorText } from "@/components/ErrorState"
 import { ValueChart } from "@/components/charts/ValueChart"
@@ -37,6 +38,8 @@ function priceTimeLabel(iso: string | null): string {
 
 export default function InvestPage() {
   const qc = useQueryClient()
+  // 隐私遮蔽开关：隐藏数量/均价/市值/盈亏等个人数字（现价/日涨跌/PE 等公开行情不隐藏）
+  const [masked, setMasked] = useInvestMask()
   const positionsQ = useQuery({ queryKey: ["positions"], queryFn: api.getPositions, refetchInterval: 60_000 })
   const historyQ = useQuery({ queryKey: ["positions-history", 90], queryFn: () => api.getPositionsHistory(90) })
   const tradesQ = useQuery({ queryKey: ["trades"], queryFn: () => api.getTrades() })
@@ -99,6 +102,12 @@ export default function InvestPage() {
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold flex items-center gap-2"><TrendingUp className="size-5" /> 投资</h1>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon"
+            aria-label={masked ? "显示金额数字" : "隐藏金额数字"}
+            title={masked ? "显示金额数字" : "隐藏金额数字"}
+            onClick={() => setMasked(!masked)}>
+            {masked ? <EyeOff /> : <Eye />}
+          </Button>
           <TradeDialog assets={assets} onSaved={invalidateAll} />
           <AssetDialog onCreated={invalidateAll} />
         </div>
@@ -114,14 +123,15 @@ export default function InvestPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[92px] rounded-xl" />)}</div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* 遮蔽时盈亏色也归中性（pnlCls(null)），避免红绿泄露盈亏方向；汇率为公开行情不遮蔽 */}
               <StatCard title="总资产" icon={Wallet}
-                value={summary ? formatMoney(summary.total_value_cny, "CNY") : "—"}
+                value={summary ? maskValue(formatMoney(summary.total_value_cny, "CNY"), masked) : "—"}
                 sub={summary ? `1 USD = ¥${fx.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}` : undefined} />
               <StatCard title="总盈亏" icon={TrendingUp}
-                value={summary ? <span className={pnlCls(summary.total_pnl_cny)}>{signedMoney(summary.total_pnl_cny, "CNY")}</span> : "—"}
-                sub={summary ? <span className={pnlCls(summary.total_pnl_cny)}>{signedPct(summary.total_pnl_pct)}</span> : undefined} />
+                value={summary ? (masked ? MASK : <span className={pnlCls(summary.total_pnl_cny)}>{signedMoney(summary.total_pnl_cny, "CNY")}</span>) : "—"}
+                sub={summary ? (masked ? MASK : <span className={pnlCls(summary.total_pnl_cny)}>{signedPct(summary.total_pnl_pct)}</span>) : undefined} />
               <StatCard title="今日盈亏" icon={Activity}
-                value={summary?.day_pnl_cny == null ? "—" : <span className={pnlCls(summary.day_pnl_cny)}>{signedMoney(summary.day_pnl_cny, "CNY")}</span>} />
+                value={summary?.day_pnl_cny == null ? "—" : masked ? MASK : <span className={pnlCls(summary.day_pnl_cny)}>{signedMoney(summary.day_pnl_cny, "CNY")}</span>} />
               <StatCard title="持仓数" icon={Layers} value={String(heldCount)} sub="个资产" />
             </div>
           )}
@@ -170,8 +180,8 @@ export default function InvestPage() {
                             <Badge variant="outline">{TYPE_LABEL[a.type] ?? "其他"}</Badge>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right tnum">{fmtQty(p.quantity)}</TableCell>
-                        <TableCell className="text-right tnum">{formatMoney(p.avg_cost, a.currency)}</TableCell>
+                        <TableCell className="text-right tnum">{maskValue(fmtQty(p.quantity), masked)}</TableCell>
+                        <TableCell className="text-right tnum">{maskValue(formatMoney(p.avg_cost, a.currency), masked)}</TableCell>
                         <TableCell className="text-right tnum">
                           <span className="inline-flex items-center justify-end gap-1">
                             {p.price != null ? formatMoney(p.price, a.currency) : "—"}
@@ -185,11 +195,11 @@ export default function InvestPage() {
                           {p.day_change_pct != null ? signedPct(p.day_change_pct) : "—"}
                         </TableCell>
                         <TableCell className="text-right tnum">{p.pe_ttm != null ? p.pe_ttm.toFixed(1) : "—"}</TableCell>
-                        <TableCell className="text-right tnum">{p.market_value != null ? formatMoney(p.market_value, a.currency) : "—"}</TableCell>
-                        <TableCell className={`text-right tnum ${pnlCls(p.unrealized_pnl)}`}>
-                          {p.unrealized_pnl != null ? signedMoney(p.unrealized_pnl, a.currency) : "—"}
+                        <TableCell className="text-right tnum">{p.market_value != null ? maskValue(formatMoney(p.market_value, a.currency), masked) : "—"}</TableCell>
+                        <TableCell className={`text-right tnum ${pnlCls(masked ? null : p.unrealized_pnl)}`}>
+                          {p.unrealized_pnl != null ? maskValue(signedMoney(p.unrealized_pnl, a.currency), masked) : "—"}
                         </TableCell>
-                        <TableCell className={`text-right tnum ${pnlCls(p.realized_pnl)}`}>{signedMoney(p.realized_pnl, a.currency)}</TableCell>
+                        <TableCell className={`text-right tnum ${pnlCls(masked ? null : p.realized_pnl)}`}>{maskValue(signedMoney(p.realized_pnl, a.currency), masked)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-0.5">
                             <TradeDialog assets={assets} initialAssetId={a.id} onSaved={invalidateAll}
@@ -229,7 +239,10 @@ export default function InvestPage() {
         <section className="space-y-2 lg:col-span-2">
           <h2 className="text-sm font-medium text-muted-foreground">收益曲线（近 90 天 · CNY）</h2>
           <div className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,.06)] p-4">
-            {historyQ.isError ? (
+            {masked ? (
+              // 遮蔽时整卡占位：Y 轴刻度会泄露绝对金额，不渲染 ValueChart
+              <p className="text-sm text-muted-foreground py-16 text-center">数字已隐藏</p>
+            ) : historyQ.isError ? (
               <ErrorState title="加载收益曲线失败" message={errorText(historyQ.error)} onRetry={() => historyQ.refetch()} />
             ) : history.length === 0 ? (
               <p className="text-sm text-muted-foreground py-16 text-center">录入交易并等待每日快照后生成曲线</p>
@@ -289,9 +302,9 @@ export default function InvestPage() {
                     <TableCell className="tnum text-muted-foreground whitespace-nowrap">{formatDate(t.traded_at)}</TableCell>
                     <TableCell className="font-medium">{a?.name ?? `#${t.asset_id}`}</TableCell>
                     <TableCell><Badge variant={t.side === "buy" ? "secondary" : "destructive"}>{t.side === "buy" ? "买入" : "卖出"}</Badge></TableCell>
-                    <TableCell className="text-right tnum">{fmtQty(t.quantity)}</TableCell>
-                    <TableCell className="text-right tnum">{formatMoney(t.price, cur)}</TableCell>
-                    <TableCell className="text-right tnum">{formatMoney(t.fee, cur)}</TableCell>
+                    <TableCell className="text-right tnum">{maskValue(fmtQty(t.quantity), masked)}</TableCell>
+                    <TableCell className="text-right tnum">{maskValue(formatMoney(t.price, cur), masked)}</TableCell>
+                    <TableCell className="text-right tnum">{maskValue(formatMoney(t.fee, cur), masked)}</TableCell>
                     <TableCell className="text-muted-foreground max-w-[180px] truncate">{t.note || "—"}</TableCell>
                     <TableCell>
                       <AlertDialog>
@@ -302,7 +315,7 @@ export default function InvestPage() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>删除这笔交易？</AlertDialogTitle>
                             <AlertDialogDescription>
-                              {formatDate(t.traded_at)} · {a?.name ?? ""} · {t.side === "buy" ? "买入" : "卖出"} {fmtQty(t.quantity)}，删除后持仓将重新计算。
+                              {formatDate(t.traded_at)} · {a?.name ?? ""} · {t.side === "buy" ? "买入" : "卖出"} {maskValue(fmtQty(t.quantity), masked)}，删除后持仓将重新计算。
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

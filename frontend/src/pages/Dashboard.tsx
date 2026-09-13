@@ -1,12 +1,14 @@
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
-import { TrendingUp, Languages, Sprout, PenLine, MessageSquare, Image } from "lucide-react"
+import { TrendingUp, Languages, Sprout, PenLine, MessageSquare, Image, Eye, EyeOff } from "lucide-react"
 import { api } from "@/lib/api"
 import { compactWindowStart } from "@/lib/dates"
+import { MASK, maskValue, useInvestMask } from "@/lib/mask"
 import { StatCard } from "@/components/StatCard"
 import { ValueChart } from "@/components/charts/ValueChart"
 import { HabitHeatmap } from "@/components/charts/HabitHeatmap"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/context/AuthContext"
@@ -17,6 +19,8 @@ const signedInt = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(Math.round(v
 
 export default function Dashboard() {
   const { user } = useAuth()
+  // 投资隐私遮蔽：与 InvestPage 页头开关同源（localStorage + storage 事件跨标签同步）
+  const [masked, setMasked] = useInvestMask()
   const { data, isPending } = useQuery({ queryKey: ["dashboard"], queryFn: api.getDashboardSummary })
   const positionsQ = useQuery({ queryKey: ["positions"], queryFn: api.getPositions })
   const historyQ = useQuery({ queryKey: ["positions-history", 30], queryFn: () => api.getPositionsHistory(30) })
@@ -46,18 +50,21 @@ export default function Dashboard() {
   const hasPositions = (positionsQ.data?.positions ?? []).length > 0
   const curve = historyQ.data?.points ?? []
 
+  // 遮蔽时盈亏色一并归中性，避免红绿泄露方向；无持仓保持 "—"/「去添加资产」语义
   const portfolioValue = !summary || !hasPositions
     ? "—"
-    : `¥${Math.round(summary.total_value_cny).toLocaleString("zh-CN")}`
+    : maskValue(`¥${Math.round(summary.total_value_cny).toLocaleString("zh-CN")}`, masked)
   const portfolioSub = positionsQ.isPending
     ? undefined
     : !summary || !hasPositions
       ? "去添加资产"
-      : (
-        <span className={pnlCls(summary.total_pnl_cny)}>
-          {signedInt(summary.total_pnl_cny)}（{summary.total_pnl_pct >= 0 ? "+" : "−"}{Math.abs(summary.total_pnl_pct).toFixed(2)}%）
-        </span>
-      )
+      : masked
+        ? MASK
+        : (
+          <span className={pnlCls(summary.total_pnl_cny)}>
+            {signedInt(summary.total_pnl_cny)}（{summary.total_pnl_pct >= 0 ? "+" : "−"}{Math.abs(summary.total_pnl_pct).toFixed(2)}%）
+          </span>
+        )
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -73,7 +80,15 @@ export default function Dashboard() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard title="投资组合" value={portfolioValue} sub={portfolioSub} icon={TrendingUp} href="/invest" />
+            <StatCard title="投资组合" value={portfolioValue} sub={portfolioSub} icon={TrendingUp} href="/invest"
+              action={
+                <Button variant="ghost" size="icon-sm"
+                  aria-label={masked ? "显示金额数字" : "隐藏金额数字"}
+                  title={masked ? "显示金额数字" : "隐藏金额数字"}
+                  onClick={() => setMasked(!masked)}>
+                  {masked ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </Button>
+              } />
             <StatCard title="今日学习"
               value={data.study_minutes_today ? `${data.study_minutes_today} 分钟` : "—"}
               sub={data.learn_streak > 0 ? `连续 ${data.learn_streak} 天` : "今天还没学习"}
@@ -95,7 +110,12 @@ export default function Dashboard() {
             <Card className={`shadow-[0_1px_3px_rgba(0,0,0,.06)] ${heatmapError ? "sm:col-span-3" : "sm:col-span-2"}`}>
               <CardHeader><CardTitle className="text-base">收益曲线（近 30 天 · CNY）</CardTitle></CardHeader>
               <CardContent>
-                {curve.length === 0 ? (
+                {masked ? (
+                  // 遮蔽时整卡占位：Y 轴刻度会泄露绝对金额，不渲染 ValueChart
+                  <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
+                    数字已隐藏
+                  </div>
+                ) : curve.length === 0 ? (
                   <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
                     录入交易并积累每日快照后生成曲线
                   </div>
