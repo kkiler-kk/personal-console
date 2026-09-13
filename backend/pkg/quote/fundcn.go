@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -81,7 +82,7 @@ func NewFundCNProvider(client *http.Client) *FundCNProvider {
 func (f *FundCNProvider) Name() string { return "fund_cn" }
 
 // flexFloat 兼容天天基金数值字段的三形态：JSON 字符串（"2.8260"）、JSON 数字（2.826）、null。
-// 占位符 "--"、空串与脏字符串一律按「缺失」处理（0），由调用方判 <=0；
+// 占位符 "--"、空串、脏字符串与**非有限值**一律按「缺失」处理（0），由调用方判 <=0；
 // 单字段畸形不该拖垮整条报价，故解析失败不上抛。
 type flexFloat float64
 
@@ -94,16 +95,24 @@ func (f *flexFloat) UnmarshalJSON(data []byte) error {
 	}
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return nil // 脏数据按缺失处理
+		return nil // 脏数据按缺失处理（含 1e999 这类溢出 → ErrRange）
+	}
+	// ParseFloat 把字面量 "NaN"/"Inf"/"-Inf"/"Infinity" 解成非有限值且 err==nil，
+	// 必须显式拦掉：NaN 能绕过调用方的 <=0 判定（NaN 的任何比较恒 false），
+	// 一路进到 json.Marshal（不支持 NaN/Inf）→ gin Render panic → Recovery 500，
+	// 击穿「Quotes/positions 永不 error、恒 200」的硬约束；写库也会静默失败。
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return nil
 	}
 	*f = flexFloat(v)
 	return nil
 }
 
 // fundMNFInfoEnvelope 为 FundMNFInfo 响应外壳（只声明用到的字段；上游另有
-// FCODE/SHORTNAME/ACCNAV/NAVCHGRT/GSZZL/GZTIME 等，本 provider 不需要）。
+// SHORTNAME/ACCNAV/NAVCHGRT/GSZZL/GZTIME 等，本 provider 不需要）。
 type fundMNFInfoEnvelope struct {
 	Datas []struct {
+		FCode string    `json:"FCODE"` // 上游回显的基金代码，用于防串数据
 		PDate string    `json:"PDATE"` // 官方净值日期（仅用于错误信息定位）
 		NAV   flexFloat `json:"NAV"`   // 单位净值
 		GSZ   flexFloat `json:"GSZ"`   // 盘中估值（收盘后/非交易日为 null）
@@ -117,7 +126,8 @@ type fundMNFInfoEnvelope struct {
 //
 // 盘中有估值（GSZ>0）时以估值为 Price、官方净值为 PreviousClose，使日涨跌有语义；
 // 收盘后/非交易日 GSZ 为 null → Price 用官方净值、PreviousClose 留 0（当日净值即最新值）。
-// NAV 缺失或非正视为失败（降级链继续 → assets.current_price 兜底）。
+// 上游回显的 FCODE 与 symbol 不符（含缺失）、或 NAV 缺失/非正/非有限，均视为失败
+// （降级链继续 → assets.current_price 兜底），绝不返回来路不明或非有限的价格。
 func (f *FundCNProvider) Fetch(ctx context.Context, symbol string) (*RawQuote, error) {
 	if !IsFundCNSymbol(symbol) {
 		return nil, ErrUnsupported
@@ -144,6 +154,13 @@ func (f *FundCNProvider) Fetch(ctx context.Context, symbol string) (*RawQuote, e
 		return nil, fmt.Errorf("fundcn: fetch %s: empty Datas", symbol)
 	}
 	row := env.Datas[0]
+	// 严格校验上游回显的代码（实测响应恒含 FCODE，缺失/为空同样视为异常）：
+	// 盲信 Datas[0] 时，上游或 CDN 串数据会把别的标的净值静默写进
+	// current_price/每日快照/回填历史——记账系统里最坏的一类故障（不可检测的数据损坏）。
+	// 宁可这里失败降级到 last-known 兜底，也不接受来路不明的价格。
+	if row.FCode != symbol {
+		return nil, fmt.Errorf("fundcn: fetch %s: upstream returned FCODE %q (mismatch)", symbol, row.FCode)
+	}
 	nav := float64(row.NAV)
 	if nav <= 0 {
 		return nil, fmt.Errorf("fundcn: fetch %s: invalid NAV %v (pdate=%q)", symbol, nav, row.PDate)

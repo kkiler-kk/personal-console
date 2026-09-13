@@ -2,6 +2,7 @@ package quote
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -206,6 +207,113 @@ func TestFundCNFetchInvalidNAVIsError(t *testing.T) {
 			}
 		})
 	}
+}
+
+// 修复轮 1 / Important #1：strconv.ParseFloat 对字面量 "NaN"/"Inf"/"-Inf"/"Infinity"
+// 返回非有限值且 err==nil，「脏数据按缺失处理」的契约对这类输入会静默失效——
+// NaN 能绕过 nav<=0 判定（NaN 比较恒 false）一路传到 gin 的 JSON 渲染
+// （json.Marshal(NaN) 报错 → Render panic → Recovery 500），击穿「positions 恒 200」。
+func TestFundCNFetchRejectsNonFiniteNumbers(t *testing.T) {
+	cases := []struct{ name, nav, gsz string }{
+		{`NAV="NaN"`, `"NaN"`, `null`},
+		{`NAV="Inf"`, `"Inf"`, `null`},
+		{`NAV="-Inf"`, `"-Inf"`, `null`},
+		{`NAV="Infinity"`, `"Infinity"`, `null`},
+		{`NAV="nan"（ParseFloat 大小写不敏感）`, `"nan"`, `null`},
+		{`NAV=+Inf（JSON 数字溢出，走 ErrRange 分支）`, `1e999`, `null`},
+		{`NAV="-Infinity"`, `"-Infinity"`, `null`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p, _ := newTestFundCN(t, fundMNFInfoBody(c.nav, c.gsz), nil)
+			q, err := p.Fetch(contextOf(), "110022")
+			if err == nil {
+				t.Fatalf("want error, got q=%+v", q)
+			}
+			if q != nil && (math.IsNaN(q.Price) || math.IsInf(q.Price, 0)) {
+				t.Fatalf("非有限值不得出现在 RawQuote 里: %+v", q)
+			}
+		})
+	}
+
+	// GSZ 非有限时不得污染 price：必须退回官方净值且为有限值。
+	t.Run(`GSZ="NaN" 退回 NAV`, func(t *testing.T) {
+		p, _ := newTestFundCN(t, fundMNFInfoBody(`"2.8260"`, `"NaN"`), nil)
+		q, err := p.Fetch(contextOf(), "110022")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if q.Price != 2.826 || q.PreviousClose != 0 {
+			t.Fatalf("q=%+v want price=2.826 prev=0", q)
+		}
+		if math.IsNaN(q.Price) || math.IsInf(q.Price, 0) {
+			t.Fatalf("price 非有限值: %v", q.Price)
+		}
+	})
+}
+
+// 修复轮 1 / Important #1（History 侧）：DWJZ 为 NaN/Inf 的行必须跳过，
+// 否则非有限 close 会写进 price_history 并顺着价值曲线/持仓扩散。
+func TestFundCNHistorySkipsNonFiniteDWJZ(t *testing.T) {
+	body := lsjzBody(
+		fmt.Sprintf(lsjzRowFmt, "2026-09-11", "2.8260", "2.8260"),
+		fmt.Sprintf(lsjzRowFmt, "2026-09-10", "NaN", "NaN"),
+		fmt.Sprintf(lsjzRowFmt, "2026-09-09", "Inf", "Inf"),
+		fmt.Sprintf(lsjzRowFmt, "2026-09-08", "2.9080", "2.9080"),
+	)
+	p, _ := newTestFundCN(t, fundMNFInfoNAVBody, map[int]string{1: body})
+
+	points, err := p.History(contextOf(), "110022", 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(points) != 2 {
+		t.Fatalf("len=%d want 2（NaN/Inf 两行必须跳过）points=%+v", len(points), points)
+	}
+	for _, pt := range points {
+		if math.IsNaN(pt.Close) || math.IsInf(pt.Close, 0) {
+			t.Fatalf("Close 非有限值: %+v", pt)
+		}
+	}
+
+	// 全为非有限值 → 无有效点 → error（不返回空切片）。
+	p2, _ := newTestFundCN(t, fundMNFInfoNAVBody,
+		map[int]string{1: lsjzBody(fmt.Sprintf(lsjzRowFmt, "2026-09-11", "NaN", "NaN"))})
+	if _, err := p2.History(contextOf(), "110022", 30); err == nil {
+		t.Fatal("want error when 全部行非有限")
+	}
+}
+
+// 修复轮 1 / Important #2：必须校验上游回显的 FCODE 与请求 symbol 一致。
+// 盲信 Datas[0] 时，上游/CDN 串数据会把别的标的净值静默写进 current_price/快照/回填历史
+// ——金融记账系统里最坏的一类故障（不可检测的数据损坏）；宁可无价走 last-known 兜底。
+func TestFundCNFetchVerifiesFCODE(t *testing.T) {
+	t.Run("FCODE 指向别的基金 → error", func(t *testing.T) {
+		body := `{"Datas":[{"FCODE":"110023","SHORTNAME":"别的基金","PDATE":"2026-09-11","NAV":"1.2340","GSZ":null}],` +
+			`"ErrCode":0,"Success":true,"TotalCount":1}`
+		p, _ := newTestFundCN(t, body, nil)
+		if _, err := p.Fetch(contextOf(), "110022"); err == nil {
+			t.Fatal("want error on FCODE mismatch")
+		}
+	})
+	t.Run("FCODE 缺失 → error（实测响应恒含该字段，缺失即异常）", func(t *testing.T) {
+		body := `{"Datas":[{"SHORTNAME":"易方达消费行业股票","PDATE":"2026-09-11","NAV":"2.8260","GSZ":null}],` +
+			`"ErrCode":0,"Success":true,"TotalCount":1}`
+		p, _ := newTestFundCN(t, body, nil)
+		if _, err := p.Fetch(contextOf(), "110022"); err == nil {
+			t.Fatal("want error when FCODE 缺失")
+		}
+	})
+	t.Run("FCODE 匹配 → 正常放行（不误伤）", func(t *testing.T) {
+		p, _ := newTestFundCN(t, fundMNFInfoEstimateBody, nil)
+		q, err := p.Fetch(contextOf(), "110022")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if q.Price != 2.851 || q.PreviousClose != 2.826 {
+			t.Fatalf("q=%+v", q)
+		}
+	})
 }
 
 // 场景④：symbol 契约——非纯 6 位数字一律 ErrUnsupported，且不发任何 HTTP 请求。
