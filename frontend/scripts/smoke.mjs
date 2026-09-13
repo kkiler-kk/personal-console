@@ -7,7 +7,11 @@ import { chromium } from "playwright"
 const BASE = process.env.BASE_URL || "http://localhost:3000"
 
 const browser = await chromium.launch()
-const page = await browser.newPage()
+// 钉死中文：context.addInitScript 在每个页面脚本前写入 ui-lang=zh，
+// 使既有 10 步的中文选择器零改动（i18n 默认英文，见第 11 步断言）。
+const context = await browser.newContext()
+await context.addInitScript(() => localStorage.setItem("ui-lang", "zh"))
+const page = await context.newPage()
 const errors = []
 page.on("pageerror", (e) => errors.push(e.message))
 
@@ -171,6 +175,14 @@ try {
   }
 }
 console.log("STEP10 HABIT PASS")
+
+// 11. i18n 默认语言断言：全新无预置 context（localStorage 为空）→ 默认英文侧边栏（text=Invest）
+const ctx2 = await browser.newContext()
+const page2 = await ctx2.newPage()
+await page2.goto(BASE + "/", { waitUntil: "networkidle" })
+await page2.waitForSelector("text=Invest", { timeout: 10_000 })
+console.log("STEP11 I18N PASS")
+await ctx2.close()
 
 if (errors.length) throw new Error("页面 JS 错误:\n" + errors.join("\n"))
 console.log("SMOKE PASS ✅")

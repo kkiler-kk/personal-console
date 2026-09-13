@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { CheckSquare, FileText, Folder, Tag, TrendingUp } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { api } from "@/lib/api"
 import { NAV_ITEMS } from "./Sidebar"
 
-// 导航组全集：NAV_ITEMS + 固定两项（无图标保持原样）；q 非空时按 label 本地 includes 过滤
-const NAV_ALL: { to: string; label: string; icon: LucideIcon | null }[] = [
+// 导航组全集：NAV_ITEMS + 固定两项（无图标保持原样）；labelKey 指向 i18n 键，q 非空时按翻译后 label 本地 includes 过滤
+const NAV_ALL: { to: string; labelKey: string; icon: LucideIcon | null }[] = [
   ...NAV_ITEMS,
-  { to: "/blog/archive", label: "博客归档", icon: null },
-  { to: "/admin", label: "管理后台", icon: null },
+  { to: "/blog/archive", labelKey: "nav.blogArchive", icon: null },
+  { to: "/admin", labelKey: "topbar.admin", icon: null },
 ]
 
 const DEBOUNCE_MS = 250
@@ -45,14 +46,15 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 // q/debounce/query 状态随之自然重置——无需手动清空，也保证关闭期间零请求
 function PaletteBody({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const go = (to: string) => { onOpenChange(false); navigate(to) }
 
   const [q, setQ] = useState("")
   const [debouncedQ, setDebouncedQ] = useState("")
   // debounce 250ms：cleanup 清掉上一个 timer，快速输入只在停顿后发一次请求
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q), DEBOUNCE_MS)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setDebouncedQ(q), DEBOUNCE_MS)
+    return () => clearTimeout(timer)
   }, [q])
 
   const trimmed = debouncedQ.trim()
@@ -64,39 +66,39 @@ function PaletteBody({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
     enabled: searchActive,
   })
 
-  // 导航组本地过滤用即时 q（不走 debounce）：纯客户端操作，反馈即时
+  // 导航组本地过滤用即时 q（不走 debounce）：纯客户端操作，反馈即时；按翻译后 label 匹配（t 随语言变化重算）
   const navQ = q.trim().toLowerCase()
   const navMatches = useMemo(
-    () => (navQ ? NAV_ALL.filter((n) => n.label.toLowerCase().includes(navQ)) : NAV_ALL),
-    [navQ],
+    () => (navQ ? NAV_ALL.filter((n) => t(n.labelKey).toLowerCase().includes(navQ)) : NAV_ALL),
+    [navQ, t],
   )
 
   return (
     // ui/command 的 CommandDialog 不含 Command root，需自行包裹；
     // shouldFilter=false 关闭 cmdk 内置模糊过滤——可见性完全由服务端结果 + 导航本地过滤决定
     <Command shouldFilter={false}>
-      <CommandInput placeholder="搜索或跳转…" onValueChange={setQ} />
+      <CommandInput placeholder={t("common.searchPlaceholder")} onValueChange={setQ} />
       <CommandList>
         {/* 搜索失败：面板内一行 text-destructive；同时隐藏 CommandEmpty 避免双重提示 */}
         {searchActive && isError && (
-          <div className="px-2 py-1.5 text-sm text-destructive">搜索失败</div>
+          <div className="px-2 py-1.5 text-sm text-destructive">{t("errors.searchFailed")}</div>
         )}
         <CommandEmpty className={searchActive && isError ? "hidden" : undefined}>
-          {searchActive && isFetching ? "搜索中…" : "无匹配结果"}
+          {searchActive && isFetching ? t("common.searching") : t("common.noResults")}
         </CommandEmpty>
 
         {navMatches.length > 0 && (
-          <CommandGroup heading="导航">
-            {navMatches.map(({ to, label, icon: Icon }) => (
+          <CommandGroup heading={t("common.groupNav")}>
+            {navMatches.map(({ to, labelKey, icon: Icon }) => (
               <CommandItem key={to} value={`nav-${to}`} onSelect={() => go(to)}>
-                {Icon ? <Icon className="size-4" /> : null} {label}
+                {Icon ? <Icon className="size-4" /> : null} {t(labelKey)}
               </CommandItem>
             ))}
           </CommandGroup>
         )}
 
         {data && data.posts.length > 0 && (
-          <CommandGroup heading="文章">
+          <CommandGroup heading={t("common.groupPosts")}>
             {data.posts.map((p) => (
               <CommandItem key={p.id} value={`post-${p.id}`} onSelect={() => go(`/blog/${p.slug}`)}>
                 <FileText className="size-4" />
@@ -112,7 +114,7 @@ function PaletteBody({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
         )}
 
         {data && data.assets.length > 0 && (
-          <CommandGroup heading="资产">
+          <CommandGroup heading={t("common.groupAssets")}>
             {data.assets.map((a) => (
               <CommandItem key={a.id} value={`asset-${a.id}`} onSelect={() => go("/invest")}>
                 <TrendingUp className="size-4" /> {a.symbol}
@@ -123,7 +125,7 @@ function PaletteBody({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
         )}
 
         {data && data.habits.length > 0 && (
-          <CommandGroup heading="习惯">
+          <CommandGroup heading={t("common.groupHabits")}>
             {data.habits.map((h) => (
               <CommandItem key={h.id} value={`habit-${h.id}`} onSelect={() => go("/life")}>
                 {/* habit.icon 为 emoji 字符串（同 HabitSection 惯例），无图标回退 CheckSquare */}
@@ -135,7 +137,7 @@ function PaletteBody({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
         )}
 
         {data && data.categories.length > 0 && (
-          <CommandGroup heading="分类">
+          <CommandGroup heading={t("common.groupCategories")}>
             {data.categories.map((c) => (
               <CommandItem key={c.id} value={`category-${c.id}`} onSelect={() => go(`/blog/category/${c.slug}`)}>
                 <Folder className="size-4" /> {c.name}
@@ -145,10 +147,10 @@ function PaletteBody({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
         )}
 
         {data && data.tags.length > 0 && (
-          <CommandGroup heading="标签">
-            {data.tags.map((t) => (
-              <CommandItem key={t.id} value={`tag-${t.id}`} onSelect={() => go(`/blog/tag/${t.name}`)}>
-                <Tag className="size-4" /> {t.name}
+          <CommandGroup heading={t("common.groupTags")}>
+            {data.tags.map((tg) => (
+              <CommandItem key={tg.id} value={`tag-${tg.id}`} onSelect={() => go(`/blog/tag/${tg.name}`)}>
+                <Tag className="size-4" /> {tg.name}
               </CommandItem>
             ))}
           </CommandGroup>

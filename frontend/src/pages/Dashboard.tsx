@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { TrendingUp, Languages, Sprout, PenLine, MessageSquare, Image, Eye, EyeOff } from "lucide-react"
 import { api } from "@/lib/api"
 import { compactWindowStart } from "@/lib/dates"
@@ -20,6 +21,7 @@ const pnlCls = (v: number) => v >= 0 ? "text-[#16a34a]" : "text-[#dc2626]"
 const signedInt = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(Math.round(v)).toLocaleString("zh-CN")}`
 
 export default function Dashboard() {
+  const { t } = useTranslation()
   const { user } = useAuth()
   // 投资隐私遮蔽：与 InvestPage 页头开关同源（localStorage + storage 事件跨标签同步）
   const [masked, setMasked] = useInvestMask()
@@ -67,20 +69,23 @@ export default function Dashboard() {
   const portfolioSub = positionsQ.isPending
     ? undefined
     : !summary || !hasPositions
-      ? "去添加资产"
+      ? t("dashboard.addAsset")
       : masked
         ? MASK
         : (
           <span className={pnlCls(summary.total_pnl_cny)}>
-            {signedInt(convertFromCNY(summary.total_pnl_cny, displayCurrency, fx))}（{summary.total_pnl_pct >= 0 ? "+" : "−"}{Math.abs(summary.total_pnl_pct).toFixed(2)}%）
+            {t("dashboard.pnlWithPct", {
+              amount: signedInt(convertFromCNY(summary.total_pnl_cny, displayCurrency, fx)),
+              pct: `${summary.total_pnl_pct >= 0 ? "+" : "−"}${Math.abs(summary.total_pnl_pct).toFixed(2)}%`,
+            })}
           </span>
         )
 
   return (
     <div className="space-y-6 max-w-6xl">
       <div>
-        <h1 className="text-xl font-semibold">你好，{user?.nickname || user?.username} <span aria-hidden="true">👋</span></h1>
-        <p className="text-sm text-muted-foreground">这是你的个人控制台总览</p>
+        <h1 className="text-xl font-semibold">{t("dashboard.greeting", { name: user?.nickname || user?.username || "" })} <span aria-hidden="true">👋</span></h1>
+        <p className="text-sm text-muted-foreground">{t("dashboard.subtitle")}</p>
       </div>
 
       {isPending || !data ? (
@@ -90,44 +95,44 @@ export default function Dashboard() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard title="投资组合" value={portfolioValue} sub={portfolioSub} icon={TrendingUp} href="/invest"
+            <StatCard title={t("dashboard.portfolio")} value={portfolioValue} sub={portfolioSub} icon={TrendingUp} href="/invest"
               action={
                 <Button variant="ghost" size="icon-sm"
-                  aria-label={masked ? "显示金额数字" : "隐藏金额数字"}
-                  title={masked ? "显示金额数字" : "隐藏金额数字"}
+                  aria-label={masked ? t("dashboard.showNumbers") : t("dashboard.hideNumbers")}
+                  title={masked ? t("dashboard.showNumbers") : t("dashboard.hideNumbers")}
                   onClick={() => setMasked(!masked)}>
                   {masked ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </Button>
               } />
-            <StatCard title="今日学习"
+            <StatCard title={t("dashboard.todayStudy")}
               value={data.study_minutes_today ? formatDuration(data.study_minutes_today) : "—"}
-              sub={data.learn_streak > 0 ? `连续 ${data.learn_streak} 天` : "今天还没学习"}
+              sub={data.learn_streak > 0 ? t("dashboard.streakDays", { n: data.learn_streak }) : t("dashboard.noStudyToday")}
               icon={Languages} href="/learn" />
-            <StatCard title="习惯打卡"
+            <StatCard title={t("dashboard.habitCheckin")}
               value={data.habits_total ? `${data.habits_checked_today}/${data.habits_total}` : "—"}
-              sub={data.habits_total === 0 ? "去创建习惯" : data.habits_checked_today === 0 ? "今天还没打卡" : "今日已打卡"}
+              sub={data.habits_total === 0 ? t("dashboard.createHabit") : data.habits_checked_today === 0 ? t("dashboard.noCheckinToday") : t("dashboard.checkedInToday")}
               icon={Sprout} href="/life" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard title="已发布文章" value={data.posts_total} icon={PenLine} href="/blog" />
-            <StatCard title="评论" value={data.comments_total} icon={MessageSquare} href="/blog" />
-            <StatCard title="照片" value={data.gallery_total} icon={Image} href="/life" />
+            <StatCard title={t("dashboard.publishedPosts")} value={data.posts_total} icon={PenLine} href="/blog" />
+            <StatCard title={t("dashboard.comments")} value={data.comments_total} icon={MessageSquare} href="/blog" />
+            <StatCard title={t("dashboard.photos")} value={data.gallery_total} icon={Image} href="/life" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* 热力卡 isError 不渲染时收益曲线补满整行（task 4.5 可选项），避免右侧留白 */}
             <Card className={`shadow-[0_1px_3px_rgba(0,0,0,.06)] ${heatmapError ? "sm:col-span-3" : "sm:col-span-2"}`}>
-              <CardHeader><CardTitle className="text-base">收益曲线（近 30 天 · CNY）</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">{t("dashboard.valueCurve")}</CardTitle></CardHeader>
               <CardContent>
                 {masked ? (
                   // 遮蔽时整卡占位：Y 轴刻度会泄露绝对金额，不渲染 ValueChart
                   <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
-                    数字已隐藏
+                    {t("dashboard.numbersHidden")}
                   </div>
                 ) : curve.length === 0 ? (
                   <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
-                    录入交易并积累每日快照后生成曲线
+                    {t("dashboard.curveEmpty")}
                   </div>
                 ) : (
                   <ValueChart points={curve} height={160} />
@@ -138,13 +143,13 @@ export default function Dashboard() {
             {/* 迷你热力卡：isError 整卡不渲染（收益曲线仍占 2/3，布局不塌） */}
             {!heatmapError && (
               <Card className="shadow-[0_1px_3px_rgba(0,0,0,.06)]">
-                <CardHeader><CardTitle className="text-base">习惯热力</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-base">{t("dashboard.habitHeat")}</CardTitle></CardHeader>
                 <CardContent>
                   {heatmapLoading ? (
                     <Skeleton className="h-[68px] w-[158px] rounded-lg" />
                   ) : heatmapDays.length === 0 ? (
                     <div className="h-[68px] flex items-center justify-center text-sm text-muted-foreground text-center">
-                      <Link to="/life" className="hover:underline">创建习惯并打卡后生成热力图</Link>
+                      <Link to="/life" className="hover:underline">{t("dashboard.heatEmpty")}</Link>
                     </div>
                   ) : (
                     <HabitHeatmap compact days={heatmapDays} year={year} />

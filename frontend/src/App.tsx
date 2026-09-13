@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { Compass } from "lucide-react"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { PagePlaceholder } from "@/components/PagePlaceholder"
@@ -20,6 +21,7 @@ import AdminHabits from "@/pages/admin/AdminHabits"
 import AdminProfile from "@/pages/admin/AdminProfile"
 
 export default function App() {
+  const { t } = useTranslation()
   return (
     <Routes>
       <Route element={<AppLayout />}>
@@ -40,7 +42,7 @@ export default function App() {
         <Route path="/admin/sessions" element={<AdminSessions />} />
         <Route path="/admin/habits" element={<AdminHabits />} />
         <Route path="/admin/profile" element={<AdminProfile />} />
-        <Route path="*" element={<PagePlaceholder title="404" description="页面不存在" icon={Compass} />} />
+        <Route path="*" element={<PagePlaceholder title="404" description={t("errors.notFound")} icon={Compass} />} />
       </Route>
     </Routes>
   )
