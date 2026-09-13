@@ -18,7 +18,8 @@ export default function AdminPosts() {
   const { data, isPending } = useQuery({ queryKey: ["admin-posts", page], queryFn: () => api.getAdminPosts({ page, size: 15 }) })
   const del = useMutation({
     mutationFn: (id: number) => api.deletePost(id),
-    onSuccess: () => { toast.success("已删除"); qc.invalidateQueries({ queryKey: ["admin-posts"] }) },
+    // 与 PostEditor 同款双域失效：管理列表 + 前台列表/总览计数（["posts"] 前缀）
+    onSuccess: () => { toast.success("已删除"); qc.invalidateQueries({ queryKey: ["admin-posts"] }); qc.invalidateQueries({ queryKey: ["posts"] }) },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "删除失败"),
   })
 

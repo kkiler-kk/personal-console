@@ -1,6 +1,6 @@
-# KK 控制台（个人博客系统）
+# Felix 的个人控制台
 
-单用户的个人控制台网站：以工具为主、文章次要。前端使用 React（TypeScript），后端使用 Go，数据库使用 MySQL，缓存使用 Redis。全站四大板块（投资/学习/生活/博客）已全部交付：博客功能（文章/分类/标签/归档/评论/照片墙）自旧站等价迁移，投资/学习/生活模块按阶段 2/3/4 依次上线。
+Felix 的个人控制台网站（原「个人博客系统」演进而来）：单用户，以工具为主、文章次要。前端使用 React（TypeScript），后端使用 Go，数据库使用 MySQL，缓存使用 Redis。全站四大板块（投资/学习/生活/博客）已全部交付：博客功能（文章/分类/标签/归档/评论/照片墙）自旧站等价迁移，投资/学习/生活模块按阶段 2/3/4 依次上线；2026-09-13 迭代新增 ⌘K 全站搜索与管理后台扩充（总览/学习记录/习惯/资料）。
 
 ## 板块
 
@@ -60,7 +60,8 @@ blogs/
 │   │   ├── trade.go            # 交易流水 CRUD（超卖校验）
 │   │   ├── invest.go           # 持仓/行情/价格历史/收益曲线
 │   │   ├── learn.go            # 语言档案 + 学习记录 + 统计 + 打卡日历
-│   │   └── habit.go            # 习惯 CRUD + 打卡/撤销 + 年度热力图
+│   │   ├── habit.go            # 习惯 CRUD + 打卡/撤销 + 年度热力图
+│   │   └── search.go           # 全站五类聚合搜索（⌘K 命令面板数据源）
 │   ├── middleware/
 │   │   └── auth.go             # JWT 认证中间件
 │   ├── model/
@@ -89,7 +90,8 @@ blogs/
         ├── index.css           # 设计 token + 全局样式（Tailwind v4）
         ├── components/
         │   ├── ui/             # shadcn/ui 基础组件
-        │   ├── layout/         # 侧边栏/顶栏/移动端 Tab/命令面板
+        │   ├── layout/         # 侧边栏/顶栏/移动端 Tab/命令面板（⌘K 全站搜索）
+        │   ├── admin/          # AdminNav 管理后台横向导航条
         │   ├── charts/         # Recharts/自绘封装（收益曲线 ValueChart、学习柱状 MinutesBar、习惯热力图 HabitHeatmap）
         │   ├── blog/           # 文章卡片/评论区/Markdown/分页
         │   └── ErrorState.tsx  # 全站统一错误态（图标 + 文案 + 可选重试）
@@ -107,7 +109,7 @@ blogs/
             ├── invest/         # 投资页（持仓表 + 类型筛选 Tab/交易/曲线/资产对话框：美股·A股·积存金·中国基金·手动预设）
             ├── learn/          # 学习页（阶段档案/记录学习/统计图表/打卡日历）
             ├── blog/           # 文章列表/详情/归档/分类/标签
-            ├── admin/          # 文章管理/分类管理/编辑器
+            ├── admin/          # 管理后台：总览/文章/分类/学习记录/习惯/资料 + 编辑器
             └── life/           # 生活页（习惯打卡热力图/随手记/照片墙灯箱）
 ```
 
@@ -201,6 +203,7 @@ npm run dev
 | GET    | /api/gallery               | 照片墙列表         |
 | DELETE | /api/gallery/:filename     | 删除照片           |
 | GET    | /api/dashboard/summary     | 控制台统计摘要（含 learn_streak/review_due/study_minutes_today 学习字段与 habits_checked_today/habits_total 习惯字段） |
+| GET    | /api/search?q=             | 全站搜索（文章/资产/习惯/分类/标签五类聚合；q 按 rune 计 1–50，越界 400；响应五键恒在，空为 []） |
 
 ### 投资接口（需认证 Bearer Token）
 
@@ -226,6 +229,7 @@ npm run dev
 | GET    | /api/learn/profiles           | 语言阶段档案（仅返回已有行，缺失语言前端渲染空卡） |
 | PUT    | /api/learn/profiles/:lang     | 更新阶段/目标/备注（upsert；lang 仅 en/es）        |
 | POST   | /api/learn/sessions           | 记录一次学习（lang/activity/minutes/date?/note?）  |
+| GET    | /api/learn/sessions?limit=    | 学习记录列表（session_date 倒序；limit 默认 100、clamp 1–200，非数字 400；返回 `sessions` + 全量 `total`） |
 | DELETE | /api/learn/sessions/:id       | 删除一条学习记录（不存在返回 404）                 |
 | GET    | /api/learn/stats              | 统计（streak/今日/本周/累计/分语言/近 28 天逐日）   |
 | GET    | /api/learn/calendar?year=     | 年度打卡日历（仅返回有记录的日期；year 默认当年）   |
@@ -428,6 +432,8 @@ PRIMARY KEY (habit_id, log_date)
 ## 功能特性
 
 - **控制台 Dashboard**：统计卡（投资组合/今日学习分钟数/习惯/文章/评论/照片）+ 近 30 天收益曲线 + 习惯近 16 周迷你热力图
+- **⌘K 全站搜索**：命令面板（⌘K/Ctrl+K）服务端聚合搜索文章/资产/习惯/分类/标签五类 + 导航快速跳转；q 限 1–50 字符，输入 250ms 防抖
+- **管理后台**：顶部 AdminNav 横向导航串起总览（六路统计卡聚合）/文章/分类/学习记录（逐条删除）/习惯（含归档切换）/资料（昵称/头像/简介）六页
 - **投资组合**：资产/交易流水/加权平均成本持仓盈亏（CNY 汇总，美元资产按实时汇率折算）；银行积存金按 `GC=F ÷ 31.1035 × USDCNY` 换算克价；持仓表支持按资产类型筛选（全部/股票/ETF/基金/黄金/其他，仅过滤持仓行，汇总卡与曲线保持全局口径）
 - **行情降级链**：Yahoo → Stooq → 天天基金（仅 6 位基金码）→ 本地兜底价（标记 stale），页面永不因行情失败而不可用；Redis 缓存 60 秒
 - **场外中国基金**：6 位纯数字基金代码（如 `110022`），净值源为天天基金/东方财富——盘中取估值 `GSZ`（官方净值作前收，日涨跌有语义）、收盘后取官方净值 `NAV`；历史净值走 `f10/lsjz`（需 Referer，单页 20 行分页拉取）；服务端强制 `type=fund`/`currency=CNY`，纳入每日快照与一年历史回填；Yahoo/Stooq 对裸 6 位码零成本跳过，不发无效外网请求

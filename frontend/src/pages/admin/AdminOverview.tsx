@@ -8,7 +8,8 @@ import { AdminNav } from "@/components/admin/AdminNav"
 // 总览统计卡：六路只读查询聚合。复用既有 queryKey（dashboard/assets/trades）以共享缓存与失效闭环；
 // 学习记录取 limit=1 只要 total，习惯取 all=1 含归档计数。任一失败降级为「—」，不整页塌。
 export default function AdminOverview() {
-  const postsQ = useQuery({ queryKey: ["admin-overview-posts"], queryFn: () => api.getPosts({ size: 1 }) })
+  // 键归入 ["posts"] 前缀失效域：发文/编辑（PostEditor）与删文（AdminPosts）后总览计数自动刷新
+  const postsQ = useQuery({ queryKey: ["posts", "overview-count"], queryFn: () => api.getPosts({ size: 1 }) })
   const dashQ = useQuery({ queryKey: ["dashboard"], queryFn: api.getDashboardSummary })
   const assetsQ = useQuery({ queryKey: ["assets"], queryFn: api.getAssets })
   const tradesQ = useQuery({ queryKey: ["trades"], queryFn: () => api.getTrades() })
@@ -35,7 +36,7 @@ export default function AdminOverview() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard title="文章" value={num(postsQ.data?.total)} sub="已发布 + 草稿" icon={FileText} href="/admin/posts" />
+          <StatCard title="文章" value={num(postsQ.data?.total)} sub="已发布" icon={FileText} href="/admin/posts" />
           <StatCard title="评论" value={num(dash?.comments_total)} icon={MessageSquare} href="/blog" />
           <StatCard title="照片" value={num(dash?.gallery_total)} icon={Image} href="/life" />
           <StatCard title="资产" value={num(assetsQ.data?.assets.length)} icon={TrendingUp} href="/invest" />

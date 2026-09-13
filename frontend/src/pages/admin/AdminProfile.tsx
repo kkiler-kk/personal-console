@@ -54,7 +54,9 @@ function ProfileForm({ initial }: { initial: Profile }) {
             <Input id="admin-profile-avatar" value={avatar} onChange={(e) => setAvatar(e.target.value)}
               maxLength={500} placeholder="https://…" className="flex-1" />
             {avatar.trim() && (
-              <img src={avatar.trim()} className="size-10 shrink-0 rounded-full object-cover" alt="头像预览" />
+              // key=src：URL 变更即重挂（display 归零）；onError 隐藏碎图标兜底
+              <img key={avatar.trim()} src={avatar.trim()} onError={(e) => { e.currentTarget.style.display = "none" }}
+                className="size-10 shrink-0 rounded-full object-cover" alt="头像预览" />
             )}
           </div>
         </div>

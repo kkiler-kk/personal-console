@@ -37,7 +37,7 @@ export function Topbar() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => navigate("/admin/posts")}><Settings2 className="size-4" /> 管理后台</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate("/admin")}><Settings2 className="size-4" /> 管理后台</DropdownMenuItem>
           <DropdownMenuItem onClick={() => { logout(); navigate("/login") }}><LogOut className="size-4" /> 退出登录</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

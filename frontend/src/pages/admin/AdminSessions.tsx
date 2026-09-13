@@ -88,7 +88,9 @@ export default function AdminSessions() {
               </TableBody>
             </Table>
           </div>
-          <p className="text-xs text-muted-foreground tnum">仅显示最近 {LIMIT} 条（共 {total} 条）</p>
+          <p className="text-xs text-muted-foreground tnum">
+            {total > LIMIT ? `仅显示最近 ${LIMIT} 条（共 ${total} 条）` : `共 ${total} 条`}
+          </p>
         </>
       )}
     </div>

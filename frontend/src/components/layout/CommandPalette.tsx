@@ -11,7 +11,7 @@ import { NAV_ITEMS } from "./Sidebar"
 const NAV_ALL: { to: string; label: string; icon: LucideIcon | null }[] = [
   ...NAV_ITEMS,
   { to: "/blog/archive", label: "博客归档", icon: null },
-  { to: "/admin/posts", label: "管理后台", icon: null },
+  { to: "/admin", label: "管理后台", icon: null },
 ]
 
 const DEBOUNCE_MS = 250
