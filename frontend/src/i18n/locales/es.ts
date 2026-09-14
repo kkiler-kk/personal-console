@@ -156,8 +156,8 @@ const es = {
     },
     side: { buy: "Comprar", sell: "Vender" },
     stale: {
-      title: "La cotización puede estar retrasada (actualizada {{time}})",
-      timeUnknown: "en un momento desconocido",
+      title: "La cotización puede estar retrasada (última actualización: {{time}})",
+      timeUnknown: "desconocida",
     },
     drag: {
       headAria: "Control de arrastre",

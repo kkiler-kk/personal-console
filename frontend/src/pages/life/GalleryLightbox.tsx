@@ -28,6 +28,7 @@ function GalleryThumb({ item, onZoom, onDelete }: { item: GalleryItem; onZoom: (
         src={item.url} alt={item.filename} loading="lazy"
         ref={(el) => { if (el?.complete) setLoaded(true) }}
         onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)} // 加载失败（404 等）同样终止骨架，避免永转；浏览器显示破图占位
         onClick={onZoom}
         className={cn("w-full cursor-zoom-in object-cover transition-opacity duration-300",
           loaded ? "h-auto opacity-100" : "absolute inset-0 size-full opacity-0")} />
@@ -60,6 +61,7 @@ function LightboxImage({ item }: { item: GalleryItem }) {
         src={item.url} alt={item.filename}
         ref={(el) => { if (el?.complete) setLoaded(true) }}
         onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)} // 同 GalleryThumb：失败终止 spinner 占位
         className={cn("max-h-[80vh] w-full rounded-lg object-contain transition-opacity duration-300",
           loaded ? "opacity-100" : "absolute inset-0 opacity-0")} />
     </div>
@@ -157,7 +159,7 @@ export function GallerySection() {
         {isError ? (
           <ErrorState title={t("life.gallery.loadFailed")} message={errorText(error)} onRetry={refetch} />
         ) : isPending ? (
-          <div className="columns-2 gap-3 sm:columns-3 lg:columns-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="mb-3 aspect-square w-full break-inside-avoid rounded-xl" />)}</div>
+          <div className="columns-2 gap-3 sm:columns-3 lg:columns-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="mb-3 aspect-[4/3] w-full break-inside-avoid rounded-xl" />)}</div>
         ) : items.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">{t("life.gallery.empty")}</p>
         ) : (

@@ -177,12 +177,19 @@ try {
 console.log("STEP10 HABIT PASS")
 
 // 11. i18n 默认语言断言：全新无预置 context（localStorage 为空）→ 默认英文侧边栏（text=Invest）
+//     + en 态年月标题格式（blog.yearMonthTitle 模板 "{{year}}-{{monthPadded}}" → "2026-09"；迭代五追加）
 const ctx2 = await browser.newContext()
 const page2 = await ctx2.newPage()
 // Task 5：page2 同样挂 pageerror，错误并入末尾 errors 终检（与主 page 同口径）
 page2.on("pageerror", (e) => errors.push(e.message))
 await page2.goto(BASE + "/", { waitUntil: "networkidle" })
 await page2.waitForSelector("text=Invest", { timeout: 10_000 })
+// 年月过滤标题由 URL 参数纯派生（不依赖当月有无文章），h1 精确文本断言 en 模板渲染格式；
+// 若语言态错误回落 zh，标题会是「2026 年 9 月」而断言失败
+const enY = now.getFullYear()
+const enM = String(now.getMonth() + 1).padStart(2, "0")
+await page2.goto(`${BASE}/blog?year=${enY}&month=${enM}`, { waitUntil: "networkidle" })
+await page2.waitForSelector(`h1:text-is("${enY}-${enM}")`, { timeout: 10_000 })
 console.log("STEP11 I18N PASS")
 await ctx2.close()
 

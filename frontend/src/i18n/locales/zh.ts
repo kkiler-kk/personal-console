@@ -156,7 +156,7 @@ const zh = {
     },
     side: { buy: "买入", sell: "卖出" },
     stale: {
-      title: "报价可能延迟（更新于 {{time}}）",
+      title: "报价可能延迟（最后更新：{{time}}）",
       timeUnknown: "时间未知",
     },
     drag: {

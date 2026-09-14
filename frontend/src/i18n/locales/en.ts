@@ -156,8 +156,8 @@ const en = {
     },
     side: { buy: "Buy", sell: "Sell" },
     stale: {
-      title: "Quote may be delayed (updated {{time}})",
-      timeUnknown: "at an unknown time",
+      title: "Quote may be delayed (last updated: {{time}})",
+      timeUnknown: "unknown",
     },
     drag: {
       headAria: "Drag handle",
