@@ -27,16 +27,34 @@ function readStoredLang(): UiLang {
 }
 
 // 资源内联（无异步 backend），init 在模块加载即完成；main.tsx 在 createRoot 前 import 本文件。
+const initialLang = readStoredLang()
 void i18n.use(initReactI18next).init({
   resources: {
     zh: { translation: zh },
     en: { translation: en },
     es: { translation: es },
   },
-  lng: readStoredLang(),
+  lng: initialLang,
   fallbackLng: DEFAULT_LANG,
   interpolation: { escapeValue: false }, // React 已在渲染层转义，关闭 i18next 二次转义
 })
+
+/**
+ * <html lang> 与 UI 语言同步：屏幕阅读器发音 + 抑制 Chrome「翻译此页」误弹。
+ * zh 映射为 zh-CN（i18n 内部键 "zh" 不是标准 BCP-47 区域码惯例，与 index.html 原值一致），
+ * 其余（en/es）直接透传。
+ * 防御说明：模块级订阅假定 document 存在——本项目是纯 SPA（无 SSR），模块仅在浏览器加载，
+ * 故不加 typeof document 守卫（惯例同本文件顶部直接访问 localStorage）。
+ */
+function applyDocumentLang(lng: string) {
+  document.documentElement.lang = lng === "zh" ? "zh-CN" : lng
+}
+
+// init 已同步完成（资源内联），立即用解析后的初始语言刷一次 lang；
+// 后续任何来源的 changeLanguage 由模块级 languageChanged 订阅跟随。
+// 与 useUiLanguage 内的组件级订阅互不干扰：i18n.on 支持多监听器，各自 off 自己的回调。
+applyDocumentLang(i18n.language || initialLang)
+i18n.on("languageChanged", applyDocumentLang)
 
 /**
  * UI 语言开关。刻意不用 Context（惯例同 useInvestMask/useDisplayCurrency）：
