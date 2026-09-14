@@ -373,6 +373,8 @@ const zh = {
       lightboxHint: "← → 切换 · Esc 关闭",
       prev: "上一张",
       next: "下一张",
+      confirmDeleteTitle: "删除这张照片？",
+      confirmDeleteDesc: "此操作不可恢复，照片文件将被永久删除",
     },
   },
   blog: {

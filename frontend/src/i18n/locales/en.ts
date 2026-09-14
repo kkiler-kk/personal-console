@@ -373,6 +373,8 @@ const en = {
       lightboxHint: "← → to browse · Esc to close",
       prev: "Previous photo",
       next: "Next photo",
+      confirmDeleteTitle: "Delete this photo?",
+      confirmDeleteDesc: "This can't be undone — the file will be permanently deleted",
     },
   },
   blog: {

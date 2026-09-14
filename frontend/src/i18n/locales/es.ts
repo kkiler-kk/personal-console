@@ -373,6 +373,8 @@ const es = {
       lightboxHint: "← → para cambiar · Esc para cerrar",
       prev: "Foto anterior",
       next: "Foto siguiente",
+      confirmDeleteTitle: "¿Eliminar esta foto?",
+      confirmDeleteDesc: "Esta acción no se puede deshacer: el archivo se eliminará permanentemente",
     },
   },
   blog: {
