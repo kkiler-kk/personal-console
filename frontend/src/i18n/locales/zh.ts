@@ -43,6 +43,8 @@ const zh = {
     prevYear: "上一年",
     nextYear: "下一年",
     yearLabel: "{{year}} 年",
+    // 资产「名称（代码）」包裹模板（TradeDialog 资产下拉 / 改价对话框副题共用）：zh 全角括号，en/es 半角
+    nameWithSymbol: "{{name}}（{{symbol}}）",
     less: "少",
     more: "多",
   },
@@ -63,6 +65,8 @@ const zh = {
   },
   dashboard: {
     greeting: "你好，{{name}}",
+    // profile 未就绪（user 为 null）时走无名问候，避免「你好，」悬空逗号
+    greetingNoName: "你好",
     subtitle: "这是你的个人控制台总览",
     portfolio: "投资组合",
     addAsset: "去添加资产",
@@ -90,6 +94,10 @@ const zh = {
     notFound: "页面不存在",
     searchFailed: "搜索失败",
     unknown: "未知错误",
+    // 基建层错误（lib/api.ts 与 AuthContext 非组件，经 i18n 单例 i18n.t 取值）
+    network: "网络连接失败，请检查后端服务",
+    requestFailed: "请求失败 ({{status}})",
+    loadProfile: "加载用户信息失败",
   },
   invest: {
     summary: {
@@ -456,7 +464,6 @@ const zh = {
       summary: "摘要（可选）",
       content: "正文（Markdown）",
       insertImage: "插入图片",
-      imageAlt: "图片",
       tags: "标签",
       tagPlaceholder: "回车添加",
       removeTagAria: "移除标签 {{tag}}",

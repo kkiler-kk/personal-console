@@ -32,7 +32,7 @@
 15. 遮蔽态下「已清仓」badge 仍显示（间接泄露数量=0；如需严格可 masked 时隐藏）
 16. lib/mask.ts mount 时无条件回写 localStorage（首访创建 invest-mask="0" 键，纯卫生）
 17. AssetDialog manual 预设切换不重置 type（显示与提交一致，无实害）
-18. formatDuration 输出格式与 LearnPage 大数字拆分的隐式契约（建议改返回 {value,unit} 或加 splitDuration helper）；NaN 守卫可选（learn 时长显示迭代审查移交）
+18. ~~formatDuration 输出格式与 LearnPage 大数字拆分的隐式契约（建议改返回 {value,unit} 或加 splitDuration helper）；NaN 守卫可选（learn 时长显示迭代审查移交）~~ —— **已关闭（迭代四 i18n Task 3 落地）**：签名改为 `formatDuration(minutes, t)`，单位词走 `common.minutes/hours` 复数键，输出恒为「数值␣单位」两段式（LearnPage 按空格拆大小字，三语同构，契约已写入 duration.ts 文档注释）
 
 ## 阶段 2.6 终审移交（2026-09-13）
 
@@ -57,3 +57,8 @@
 31. gofmt 一次性 pass（并 29）——`gofmt -l backend` 现报 `model/model.go`（CanDelete 对齐）与 `handler/post.go` 两文件；纯格式零行为，另起独立 chore 提交，勿混入功能波
 32. `resolveDisplayCurrency` 提取共享（并 25 设触发条件）——现 InvestPage/Dashboard 双份 fx 回落判定不动，**第三消费点出现时**再提取，避免过早抽象
 33. smoke 币种切换断言（可选）——UI 拨 CNY↔USD 开关后断言汇总卡前缀/换算数值（当前 step 8 只覆盖 API 层；reorder 回归门已于终审波入 step 8）
+
+## 迭代四遗留（2026-09-14 i18n 三语收尾）
+
+34. **后端错误消息 i18n（错误码方案）**——后端 handler 返回中文错误字符串，前端 `lib/api.ts` 对 `data.error` 原样透传不译（仅本地兜底壳 `errors.network/requestFailed` 走 i18n）；根治方案：后端改返回稳定错误码 + 参数，前端按码映射 `errors.*` 键（或 i18next 直接以码为键）——涉及全部 handler 错误路径与前端 13 处 errorText 消费点，宜独立迭代
+35. **i18next TS augmentation（键编译期校验）**——Task 5 评估结论：NAV_ITEMS `labelKey` 窄联合不做（7 个静态定义零错字，边际收益趋零）；全站 `t()` 键编译期校验需 `i18next.d.ts` CustomTypeOptions 增强，但与既有动态键模式（`labelKey` 变量、`` `invest.preset.${v}.label` `` 模板拼接）冲突、需逐点显式断言，属迭代级改动，需要时另起

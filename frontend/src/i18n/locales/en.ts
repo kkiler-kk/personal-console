@@ -43,6 +43,8 @@ const en = {
     prevYear: "Previous year",
     nextYear: "Next year",
     yearLabel: "{{year}}",
+    // Asset "name (symbol)" wrap template (TradeDialog asset select / price dialog subtitle); zh keeps full-width parens
+    nameWithSymbol: "{{name}} ({{symbol}})",
     less: "Less",
     more: "More",
   },
@@ -63,6 +65,8 @@ const en = {
   },
   dashboard: {
     greeting: "Hello, {{name}}",
+    // Nameless greeting while the profile is still loading (user null) — avoids a dangling "Hello, "
+    greetingNoName: "Hello",
     subtitle: "This is your personal console overview",
     portfolio: "Portfolio",
     addAsset: "Add an asset",
@@ -90,6 +94,10 @@ const en = {
     notFound: "Page not found",
     searchFailed: "Search failed",
     unknown: "Unknown error",
+    // Infra-level errors (lib/api.ts & AuthContext are non-components; resolved via the i18n singleton i18n.t)
+    network: "Network connection failed — check that the backend is running",
+    requestFailed: "Request failed ({{status}})",
+    loadProfile: "Failed to load user info",
   },
   invest: {
     summary: {
@@ -149,7 +157,7 @@ const en = {
     side: { buy: "Buy", sell: "Sell" },
     stale: {
       title: "Quote may be delayed (updated {{time}})",
-      timeUnknown: "time unknown",
+      timeUnknown: "at an unknown time",
     },
     drag: {
       headAria: "Drag handle",
@@ -370,7 +378,8 @@ const en = {
   blog: {
     title: "Blog",
     archive: "Archive",
-    yearMonthTitle: "{{year}}-{{month}}",
+    // monthPadded: zero-padded month supplied by the call site (ISO-like 2026-05); zh uses the raw {{month}}
+    yearMonthTitle: "{{year}}-{{monthPadded}}",
     // Archive month cell: zh keeps the spaced form "N 月" (distinct from common.months); en/es show the number
     month: "{{m}}",
     categoryTitle: "Category: {{name}}",
@@ -456,7 +465,6 @@ const en = {
       summary: "Summary (optional)",
       content: "Body (Markdown)",
       insertImage: "Insert image",
-      imageAlt: "image",
       tags: "Tags",
       tagPlaceholder: "Press Enter to add",
       removeTagAria: "Remove tag {{tag}}",

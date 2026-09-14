@@ -43,6 +43,8 @@ const es = {
     prevYear: "Año anterior",
     nextYear: "Año siguiente",
     yearLabel: "{{year}}",
+    // Plantilla «nombre (símbolo)» del activo (selector de TradeDialog / subtítulo del diálogo de precio); zh mantiene los paréntesis de ancho completo
+    nameWithSymbol: "{{name}} ({{symbol}})",
     less: "Menos",
     more: "Más",
   },
@@ -63,6 +65,8 @@ const es = {
   },
   dashboard: {
     greeting: "Hola, {{name}}",
+    // Saludo sin nombre mientras el perfil aún no está cargado (user null) — evita un «Hola, » colgante
+    greetingNoName: "Hola",
     subtitle: "Este es el resumen de tu consola personal",
     portfolio: "Cartera",
     addAsset: "Añadir un activo",
@@ -90,6 +94,10 @@ const es = {
     notFound: "Página no encontrada",
     searchFailed: "Error de búsqueda",
     unknown: "Error desconocido",
+    // Errores de infraestructura (lib/api.ts y AuthContext no son componentes; se resuelven con el singleton i18n.t)
+    network: "Error de conexión de red — comprueba que el backend esté en marcha",
+    requestFailed: "Error en la solicitud ({{status}})",
+    loadProfile: "Error al cargar la información del usuario",
   },
   invest: {
     summary: {
@@ -149,7 +157,7 @@ const es = {
     side: { buy: "Comprar", sell: "Vender" },
     stale: {
       title: "La cotización puede estar retrasada (actualizada {{time}})",
-      timeUnknown: "hora desconocida",
+      timeUnknown: "en un momento desconocido",
     },
     drag: {
       headAria: "Control de arrastre",
@@ -190,7 +198,7 @@ const es = {
       dialogDesc: "Compra o vende un activo; el precio toma por defecto el precio actual",
       asset: "Activo",
       selectAsset: "Selecciona un activo",
-      side: "Dirección",
+      side: "Lado",
       date: "Fecha",
       quantity: "Cantidad",
       price: "Precio ({{cur}})",
@@ -370,7 +378,8 @@ const es = {
   blog: {
     title: "Blog",
     archive: "Archivo",
-    yearMonthTitle: "{{year}}-{{month}}",
+    // monthPadded: mes con cero a la izquierda desde el punto de llamada (2026-05); zh usa el {{month}} sin rellenar
+    yearMonthTitle: "{{year}}-{{monthPadded}}",
     // Celda de mes del archivo: zh mantiene la forma con espacio "N 月" (distinta de common.months); en/es muestran el número
     month: "{{m}}",
     categoryTitle: "Categoría: {{name}}",
@@ -456,7 +465,6 @@ const es = {
       summary: "Resumen (opcional)",
       content: "Cuerpo (Markdown)",
       insertImage: "Insertar imagen",
-      imageAlt: "imagen",
       tags: "Etiquetas",
       tagPlaceholder: "Pulsa Intro para añadir",
       removeTagAria: "Quitar la etiqueta {{tag}}",

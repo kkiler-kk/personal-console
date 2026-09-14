@@ -1,3 +1,4 @@
+import i18n from "@/i18n"
 import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Habit, HeatmapDay, Post, PostListResp, ArchiveItem, Tag, Asset, AssetType, PriceSource, Trade, PositionsResp, PositionsHistoryResp, ActivityType, CalendarDay, Lang, LanguageProfile, LearnStats, LearnSessionsResp, SearchResult } from "./types"
 
 const BASE = "/api"
@@ -20,13 +21,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     res = await fetch(`${BASE}${path}`, { ...options, headers })
   } catch {
-    // 断网/DNS 失败等网络层异常：包装为 ApiError(0)，保证下游 instanceof ApiError 判断一致
-    throw new ApiError(0, "网络连接失败，请检查后端服务")
+    // 断网/DNS 失败等网络层异常：包装为 ApiError(0)，保证下游 instanceof ApiError 判断一致。
+    // 非组件模块不能用 useTranslation——走 i18n 单例即时求值（ErrorState errorText 同款先例）；
+    // 消息在 throw 时定格为当时语言，属可接受语义（错误发生时刻的 UI 语言）
+    throw new ApiError(0, i18n.t("errors.network"))
   }
   // 有意使用 any：后端各端点响应形态不一，且需兼容 204/空 body 的宽松解析
   let data: any = null
   try { data = await res.json() } catch { /* 204 等无 body 场景 */ }
-  if (!res.ok) throw new ApiError(res.status, data?.error || `请求失败 (${res.status})`)
+  // 后端 data.error（中文）原样透传不译（BACKLOG：错误码 i18n）；仅本地兜底壳走 i18n
+  if (!res.ok) throw new ApiError(res.status, data?.error || i18n.t("errors.requestFailed", { status: res.status }))
   return data as T
 }
 

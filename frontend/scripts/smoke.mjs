@@ -179,6 +179,8 @@ console.log("STEP10 HABIT PASS")
 // 11. i18n 默认语言断言：全新无预置 context（localStorage 为空）→ 默认英文侧边栏（text=Invest）
 const ctx2 = await browser.newContext()
 const page2 = await ctx2.newPage()
+// Task 5：page2 同样挂 pageerror，错误并入末尾 errors 终检（与主 page 同口径）
+page2.on("pageerror", (e) => errors.push(e.message))
 await page2.goto(BASE + "/", { waitUntil: "networkidle" })
 await page2.waitForSelector("text=Invest", { timeout: 10_000 })
 console.log("STEP11 I18N PASS")

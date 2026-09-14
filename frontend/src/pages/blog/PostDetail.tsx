@@ -26,7 +26,8 @@ export default function PostDetail() {
         <span className="inline-flex items-center gap-1"><CalendarDays className="size-3.5" />{formatDate(post.created_at)}</span>
         <span className="inline-flex items-center gap-1 tnum"><Eye className="size-3.5" />{post.view_count}</span>
         {post.category && <Badge variant="secondary">{post.category.name}</Badge>}
-        {post.tags?.map((t) => <Badge key={t.id} variant="outline">{t.name}</Badge>)}
+        {/* 形参用 tag：t 是 useTranslation 的翻译函数，勿遮蔽（PostEditor 同款） */}
+        {post.tags?.map((tag) => <Badge key={tag.id} variant="outline">{tag.name}</Badge>)}
       </div>
       <div className="mt-6"><Markdown content={post.content} /></div>
       <CommentSection slug={post.slug} />

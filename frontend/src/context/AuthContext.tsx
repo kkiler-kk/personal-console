@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { toast } from "sonner"
+import i18n from "@/i18n"
 import { api } from "@/lib/api"
 import type { AuthUser } from "@/lib/types"
 
@@ -22,7 +23,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const p = await api.getProfile()
       setUser({ id: p.id, username: p.username, nickname: p.nickname, avatar: p.avatar })
     } catch {
-      toast.error("加载用户信息失败")
+      // 非组件回调不能用 useTranslation——i18n 单例即时求值（lib/api.ts / errorText 同款先例）
+      toast.error(i18n.t("errors.loadProfile"))
     }
   }
 

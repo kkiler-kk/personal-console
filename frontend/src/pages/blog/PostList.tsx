@@ -45,8 +45,9 @@ export default function PostList() {
   const year = params.get("year") ? Number(params.get("year")) : undefined
   const month = params.get("month") ? Number(params.get("month")) : undefined
   // 标题：年-only 复用 common.yearLabel（zh「{{year}} 年」逐字），年+月走 blog.yearMonthTitle 整句插值
+  // （en/es 模板消费补零的 monthPadded → 2026-05；zh 用原始 month →「2026 年 5 月」）
   const title = year
-    ? (month ? t("blog.yearMonthTitle", { year, month }) : t("common.yearLabel", { year }))
+    ? (month ? t("blog.yearMonthTitle", { year, month, monthPadded: String(month).padStart(2, "0") }) : t("common.yearLabel", { year }))
     : t("blog.title")
   // key：year/month 变化时重挂载，避免沿用旧 page 导致过滤后落在空页
   return <PostListPage key={`${year ?? ""}-${month ?? ""}`} year={year} month={month}

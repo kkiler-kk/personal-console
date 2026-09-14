@@ -536,7 +536,7 @@ export default function InvestPage() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{t("invest.price.dialogTitle")}</DialogTitle>
-            <DialogDescription>{priceAsset?.name}（{priceAsset?.symbol}）</DialogDescription>
+            <DialogDescription>{t("common.nameWithSymbol", { name: priceAsset?.name, symbol: priceAsset?.symbol })}</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5 py-1">
             <Label htmlFor="price-input">{t("invest.price.label", { cur: priceAsset?.currency === "CNY" ? "¥" : "$" })}</Label>

@@ -88,7 +88,7 @@ export function TradeDialog({ assets, onSaved, initialAssetId, trigger }: {
               <SelectTrigger className="w-full"><SelectValue placeholder={t("invest.trade.selectAsset")} /></SelectTrigger>
               <SelectContent>
                 {assets.map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>{a.name}（{a.symbol}）</SelectItem>
+                  <SelectItem key={a.id} value={String(a.id)}>{t("common.nameWithSymbol", { name: a.name, symbol: a.symbol })}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

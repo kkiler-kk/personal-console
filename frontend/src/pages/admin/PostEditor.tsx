@@ -68,7 +68,8 @@ export default function PostEditor() {
 
   const upload = useMutation({
     mutationFn: (f: File) => api.uploadImage(f),
-    onSuccess: (r) => { setContent((c) => `${c}\n\n![${t("admin.editor.imageAlt")}](${r.url})\n`); toast.success(t("admin.editor.imageInserted")) },
+    // alt 固定语言中性 "image"：Markdown 正文持久化存储，不得随插入时的 UI 语言渗入本地化文本（原 admin.editor.imageAlt 键已随之删除）
+    onSuccess: (r) => { setContent((c) => `${c}\n\n![image](${r.url})\n`); toast.success(t("admin.editor.imageInserted")) },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : t("admin.editor.uploadFailed")),
   })
 

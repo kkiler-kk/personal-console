@@ -1,6 +1,6 @@
 # 个人控制台网站重构设计
 
-日期：2026-09-12（修订：12 日学习模块简化废弃生词本/SRS、健身模块取消；13 日学习模块增补时长记录与统计；13 日增补：中国基金支持；13 日：移除登录（单用户直通）、持仓排序、币种切换）
+日期：2026-09-12（修订：12 日学习模块简化废弃生词本/SRS、健身模块取消；13 日学习模块增补时长记录与统计；13 日增补：中国基金支持；13 日：移除登录（单用户直通）、持仓排序、币种切换；13 日：「仅中文界面」原则修订为三语 i18n——迭代四，2026-09-14 回写）
 状态：已与用户对齐，阶段 1 已按此交付
 目标读者：本仓库的实施者（Claude / 用户本人）
 
@@ -55,7 +55,7 @@ MySQL + Redis：docker-compose 本地启动（不变）
 - 后端沿用现有分层（handler → sqlx 直查 → Redis 缓存，mutation 后失效缓存），新模块照抄现有 `post.go`/`category.go` 的模式。
 - 单用户站点：**无认证单用户直通**（2026-09-13 用户决定）：登录/注册全部移除，`SingleUserMiddleware` 对每个请求注入 `users.id=1`；**公网部署前必须恢复 JWT 认证**（`pkg/jwt.go` 保留为基座，`middleware/auth.go` 的 git 历史有完整 JWT 实现，裁决清单见 §8）。`users` 表及"第一个用户是管理员"机制不变（felix 用户 id=1 由 migrate 幂等种子）。
 - 前端选择 TypeScript：重写是引入类型安全的最佳时机，配合 shadcn/ui 生态默认实践。
-- 前端 v1 **仅中文界面**（用户为中文母语）；组件文案集中管理，预留 i18n 恢复的可能。现有 `i18n/`、`MatrixRain`、`TerminalOverlay` 等移除；`CommandPalette`（⌘K）以 shadcn 风格重做保留。
+- ~~前端 v1 **仅中文界面**（用户为中文母语）；组件文案集中管理，预留 i18n 恢复的可能。~~ —— **2026-09-13 用户决定修订为三语 i18n（迭代四已交付）**：react-i18next 三语（中 zh/英 en/西 es），默认英文；顶栏切换即时生效，localStorage `ui-lang` 持久化 + 跨标签同步；文案集中于 `frontend/src/i18n/locales/{zh,en,es}.ts`，三语键集合一致性由 `frontend/scripts/check-i18n.mjs` 自检；后端错误消息暂保持中文原样透传（错误码 i18n 见 BACKLOG）。v1 重写时旧 `i18n/`、`MatrixRain`、`TerminalOverlay` 等移除；`CommandPalette`（⌘K）以 shadcn 风格重做保留。
 
 ## 3. 数据模型
 

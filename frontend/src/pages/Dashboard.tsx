@@ -84,7 +84,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 max-w-6xl">
       <div>
-        <h1 className="text-xl font-semibold">{t("dashboard.greeting", { name: user?.nickname || user?.username || "" })} <span aria-hidden="true">👋</span></h1>
+        {/* profile 未就绪（user null）走无名问候，避免「Hello, 」悬空逗号（Task 5） */}
+        <h1 className="text-xl font-semibold">{user ? t("dashboard.greeting", { name: user.nickname || user.username }) : t("dashboard.greetingNoName")} <span aria-hidden="true">👋</span></h1>
         <p className="text-sm text-muted-foreground">{t("dashboard.subtitle")}</p>
       </div>
 
