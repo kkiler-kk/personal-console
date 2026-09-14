@@ -6,7 +6,7 @@
 
 ## 首次迭代优先
 
-1. 照片墙删除按钮加 AlertDialog 确认 + `group-focus-within:opacity-100`（frontend/src/pages/life/GalleryLightbox.tsx:110，误触即删 + 键盘不可见）
+1. ~~照片墙删除按钮加 AlertDialog 确认 + `group-focus-within:opacity-100`~~ —— **已关闭（迭代五 Task 1，81c833f）**：删除按钮移入悬停浮层 + AlertDialog 确认 + `group-focus-within:opacity-100` 键盘可达全部落地
 2. generateSlug 同秒冲突加固：纯中文标题同秒两条会撞 UNIQUE → 500，冲突时追加随机后缀（backend/handler/post.go:406 附近）
 3. ErrorState 显示条件收紧为 `isError && !data`（PostList/Archive/CommentSection/InvestPage，避免后台 refetch 失败遮蔽已有数据）
 
@@ -62,3 +62,7 @@
 
 34. **后端错误消息 i18n（错误码方案）**——后端 handler 返回中文错误字符串，前端 `lib/api.ts` 对 `data.error` 原样透传不译（仅本地兜底壳 `errors.network/requestFailed` 走 i18n）；根治方案：后端改返回稳定错误码 + 参数，前端按码映射 `errors.*` 键（或 i18next 直接以码为键）——涉及全部 handler 错误路径与前端 13 处 errorText 消费点，宜独立迭代
 35. **i18next TS augmentation（键编译期校验）**——Task 5 评估结论：NAV_ITEMS `labelKey` 窄联合不做（7 个静态定义零错字，边际收益趋零）；全站 `t()` 键编译期校验需 `i18next.d.ts` CustomTypeOptions 增强，但与既有动态键模式（`labelKey` 变量、`` `invest.preset.${v}.label` `` 模板拼接）冲突、需逐点显式断言，属迭代级改动，需要时另起
+
+## 迭代五遗留（2026-09-14 照片墙现代化，minor 延后）
+
+36. 照片墙触屏适配——无 hover 设备上浮层 `opacity-0` 但删除按钮 `pointer-events-auto`，点缩略图右上角会弹出"看不见的按钮"触发的确认框（AlertDialog 已兜底无数据风险；如做触屏适配可 `@media (hover: none)` 常显信息条或改长按菜单）（frontend/src/pages/life/GalleryLightbox.tsx 浮层区）
