@@ -82,7 +82,7 @@ blogs/
     ├── components.json         # shadcn/ui 配置
     ├── index.html
     ├── scripts/
-    │   └── smoke.mjs           # Playwright 冒烟测试（十步链路）
+    │   └── smoke.mjs           # Playwright 冒烟测试（十一步链路）
     └── src/
         ├── main.tsx            # 入口
         ├── App.tsx             # 路由
@@ -166,7 +166,7 @@ npm run dev
 
 ### 4. 冒烟测试（可选）
 
-全栈跑起来后执行：`node frontend/scripts/smoke.mjs`（**无需任何凭据环境变量**；`BASE_URL` 可覆盖前端地址，默认 `http://localhost:3000`），十步链路（直达 Dashboard → 博客 → 管理后台 → 管理总览 → 全站搜索 → 生活页 → 评论发删、投资链路：建资产→录交易→持仓校验→清理、学习链路：记录时长→统计校验→/learn 页面→清理、习惯链路：建习惯→打卡→热力图含今天→/life 页面→清理）全过输出 `STEP5 SEARCH PASS` + `STEP8 INVEST PASS` + `STEP9 LEARN PASS` + `STEP10 HABIT PASS` + `SMOKE PASS ✅`。
+全栈跑起来后执行：`node frontend/scripts/smoke.mjs`（**无需任何凭据环境变量**；`BASE_URL` 可覆盖前端地址，默认 `http://localhost:3000`），十一步链路（直达 Dashboard → 博客 → 管理后台 → 管理总览 → 全站搜索 → 生活页 → 评论发删、投资链路：建资产→录交易→持仓校验→清理、学习链路：记录时长→统计校验→/learn 页面→清理、习惯链路：建习惯→打卡→热力图含今天→/life 页面→清理、i18n 默认英文断言）全过输出 `STEP5 SEARCH PASS` + `STEP8 INVEST PASS` + `STEP9 LEARN PASS` + `STEP10 HABIT PASS` + `STEP11 I18N PASS` + `SMOKE PASS ✅`。
 
 ## API 文档
 
@@ -449,7 +449,7 @@ PRIMARY KEY (habit_id, log_date)
 - **Redis 缓存**：文章列表、分类、标签数据缓存 5-30 分钟
 - **无登录直入**：单用户本地部署，打开即用（2026-09-13 移除登录/注册，后端 SingleUserMiddleware 将所有请求视为 felix/id=1；公网部署前必须恢复认证，见「安全注意」）
 - **深浅色主题**：仪表盘风 UI，支持明暗切换；移动端底部 Tab 导航
-- **冒烟测试**：Playwright 脚本十步链路（无需凭据）：直达 Dashboard（无登录）→ 博客 → 管理后台 → 管理总览 → 全站搜索 → 生活页 → 评论发删 → 投资链路（建资产/录交易/持仓校验/清理）→ 学习链路（记录时长/统计校验/页面断言/清理）→ 习惯链路（建习惯/打卡/热力图含今天/页面断言/清理）
+- **冒烟测试**：Playwright 脚本十一步链路（无需凭据）：直达 Dashboard（无登录）→ 博客 → 管理后台 → 管理总览 → 全站搜索 → 生活页 → 评论发删 → 投资链路（建资产/录交易/持仓校验/清理）→ 学习链路（记录时长/统计校验/页面断言/清理）→ 习惯链路（建习惯/打卡/热力图含今天/页面断言/清理）→ i18n 默认英文断言（英文侧边栏 + 年月归档标题格式）
 
 ## 环境变量配置
 

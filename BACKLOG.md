@@ -65,4 +65,4 @@
 
 ## 迭代五遗留（2026-09-14 照片墙现代化，minor 延后）
 
-36. 照片墙触屏适配——无 hover 设备上浮层 `opacity-0` 但删除按钮 `pointer-events-auto`，点缩略图右上角会弹出"看不见的按钮"触发的确认框（AlertDialog 已兜底无数据风险；如做触屏适配可 `@media (hover: none)` 常显信息条或改长按菜单）（frontend/src/pages/life/GalleryLightbox.tsx 浮层区）
+36. 照片墙触屏 + 键盘 a11y（frontend/src/pages/life/GalleryLightbox.tsx）——①触屏：无 hover 设备上浮层 `opacity-0` 但删除按钮 `pointer-events-auto`，点缩略图右上角会弹出"看不见的按钮"触发的确认框（AlertDialog 已兜底无数据风险；适配可 `@media (hover: none)` 常显信息条或改长按菜单）；②文件名 span `pointer-events-auto` 触屏死区：点击既不开灯箱也无 tooltip，触屏适配一并处理；③键盘：灯箱放大不可键盘触发（img onClick 无 tabIndex/role——删除钮已 focus-within 可达，打开动作缺失；如做可改 button 包裹或 role="button"+tabIndex+Enter）
