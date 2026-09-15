@@ -66,3 +66,10 @@
 ## 迭代五遗留（2026-09-14 照片墙现代化，minor 延后）
 
 36. 照片墙触屏 + 键盘 a11y（frontend/src/pages/life/GalleryLightbox.tsx）——①触屏：无 hover 设备上浮层 `opacity-0` 但删除按钮 `pointer-events-auto`，点缩略图右上角会弹出"看不见的按钮"触发的确认框（AlertDialog 已兜底无数据风险；适配可 `@media (hover: none)` 常显信息条或改长按菜单）；②文件名 span `pointer-events-auto` 触屏死区：点击既不开灯箱也无 tooltip，触屏适配一并处理；③键盘：灯箱放大不可键盘触发（img onClick 无 tabIndex/role——删除钮已 focus-within 可达，打开动作缺失；如做可改 button 包裹或 role="button"+tabIndex+Enter）
+
+## 迭代六遗留（2026-09-15 持仓强制刷新，minor 延后）
+
+37. refresh 整体超时/并发上限——单上游请求 10s × 3 provider × N 资产无整体 deadline（现网 10 资产实测 1.7s）；pending 禁用仅单标签页生效，多标签可同时打上游。如做：ctx WithTimeout + 服务端单飞（singleflight）或最小间隔
+38. force 不穿透积存金输入与汇率——goldResolver 内部 `Quotes(GC=F, CNY=X)` 与汇总 `USDCNY`（1h 缓存）在强制刷新时仍吃缓存，积存金克价时效最多滞后 60s/汇率 1h。如做：ResolveGold 加 force 形参或独立 force 路径
+39. 「自动跟踪」两种表述收敛——SQL `service.AutoTrackedWhere`（snapshot/refresh）vs Go `!= "manual"`（invest.go positions 组装）；当前 price_source 白名单下等价，新增枚举值会静默分叉（positions 送刷、refresh 不送）。收敛为单一来源；顺带评估 `AutoTrackedWhere` 挪出 service 包（handler→service 依赖方向，现无环）
+40. 存量资产 513650/513300 配置核对——以 `price_source=yahoo` + 裸 6 位码入库：Yahoo 前置拒绝，实际由链尾 FundCN（场外净值）定价、PE 恒 null（用户已知悉，此前沟通结论：想要场内实时市价需重建为 `.SS` 后缀资产）。如长期持有场内份额，建议改建；refresh 会把 FundCN 净值写回 current_price 属该配置的正常语义
