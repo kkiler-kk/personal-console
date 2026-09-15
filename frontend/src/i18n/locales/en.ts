@@ -116,6 +116,10 @@ const en = {
     showNumbers: "Show amounts",
     hideNumbers: "Hide amounts",
     numbersHidden: "Amounts hidden",
+    // Force-refresh quotes + PE (iteration six): button title/aria-label, success toast (counts), failure fallback
+    refresh: "Force-refresh quotes & PE",
+    refreshDone: "Refreshed {{quotes}} quotes and {{pes}} PEs",
+    refreshFailed: "Refresh failed",
     section: {
       holdings: "Holdings",
       curve: "Value curve (last 90 days · CNY)",

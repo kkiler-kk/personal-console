@@ -51,6 +51,8 @@ export interface PositionsSummary {
   total_pnl_pct: number; day_pnl_cny: number | null; fx_usdcny: number
 }
 export interface PositionsResp { positions: PositionRow[]; summary: PositionsSummary }
+// 强制刷新结果（迭代六，POST /invest/refresh）：refreshed=非 stale 行情数 / 非 nil PE 数，total=送刷 symbol 数
+export interface RefreshResult { refreshed_quotes: number; total_quotes: number; refreshed_pes: number; total_pes: number }
 export interface CurvePoint { date: string; value: number; cost: number; pnl: number }
 export interface PositionsHistoryResp { points: CurvePoint[]; currency: string }
 

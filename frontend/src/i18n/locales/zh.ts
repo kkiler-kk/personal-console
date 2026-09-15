@@ -116,6 +116,10 @@ const zh = {
     showNumbers: "显示金额数字",
     hideNumbers: "隐藏金额数字",
     numbersHidden: "数字已隐藏",
+    // 强制刷新现价+PE（迭代六）：按钮 title/aria-label、成功 toast（计数插值）、失败兜底
+    refresh: "强制刷新行情与 PE",
+    refreshDone: "已刷新 {{quotes}} 项行情、{{pes}} 项 PE",
+    refreshFailed: "刷新失败",
     section: {
       holdings: "持仓",
       curve: "收益曲线（近 90 天 · CNY）",

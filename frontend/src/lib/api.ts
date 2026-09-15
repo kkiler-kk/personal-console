@@ -1,5 +1,5 @@
 import i18n from "@/i18n"
-import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Habit, HeatmapDay, Post, PostListResp, ArchiveItem, Tag, Asset, AssetType, PriceSource, Trade, PositionsResp, PositionsHistoryResp, ActivityType, CalendarDay, Lang, LanguageProfile, LearnStats, LearnSessionsResp, SearchResult } from "./types"
+import type { AuthUser, Category, Comment, DashboardSummary, GalleryItem, Habit, HeatmapDay, Post, PostListResp, ArchiveItem, Tag, Asset, AssetType, PriceSource, Trade, PositionsResp, PositionsHistoryResp, RefreshResult, ActivityType, CalendarDay, Lang, LanguageProfile, LearnStats, LearnSessionsResp, SearchResult } from "./types"
 
 const BASE = "/api"
 
@@ -102,6 +102,8 @@ export const api = {
   getPositions: () => request<PositionsResp>("/positions"),
   getPositionsHistory: (days = 90) => request<PositionsHistoryResp>(`/positions/history${qs({ days })}`),
   getPriceHistory: (symbol: string, days = 90) => request<{ points: { date: string; close: number }[] }>(`/price-history${qs({ symbol, days })}`),
+  // 强制刷新持仓现价 + PE（迭代六）：POST 无 body；后端跳过缓存读取直取上游，返回四计数
+  refreshInvest: () => request<RefreshResult>("/invest/refresh", { method: "POST" }),
 
   getLearnProfiles: () => request<{ profiles: LanguageProfile[] }>("/learn/profiles"),
   updateLearnProfile: (lang: Lang, body: { level: string; goal?: string; note?: string }) =>

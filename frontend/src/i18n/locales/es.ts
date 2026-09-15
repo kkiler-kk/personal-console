@@ -116,6 +116,10 @@ const es = {
     showNumbers: "Mostrar importes",
     hideNumbers: "Ocultar importes",
     numbersHidden: "Importes ocultos",
+    // Forzar actualización de precios + PE (iteración seis): title/aria-label del botón, toast de éxito (recuentos), fallo
+    refresh: "Forzar actualización de precios y PE",
+    refreshDone: "{{quotes}} precios y {{pes}} PE actualizados",
+    refreshFailed: "Error al actualizar",
     section: {
       holdings: "Posiciones",
       curve: "Curva de valor (últimos 90 días · CNY)",

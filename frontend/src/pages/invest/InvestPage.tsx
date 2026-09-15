@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { Wallet, TrendingUp, Activity, Layers, Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Wallet, TrendingUp, Activity, Layers, Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, ArrowUpDown, ArrowUp, ArrowDown, RefreshCw } from "lucide-react"
 import { api, ApiError } from "@/lib/api"
 import type { Asset, AssetType, PositionRow, PositionsResp } from "@/lib/types"
 import { formatMoney, formatDate, formatDateTime } from "@/lib/format"
@@ -146,6 +146,20 @@ export default function InvestPage() {
     onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("invest.toast.deleteFailed")),
   })
 
+  // 强制刷新现价+PE（迭代六）：后端跳过 Redis 缓存读取直取上游（行情+PE 一次刷完）。
+  // 无服务端限流——单用户场景，pending 禁用按钮即够（brief 裁决）。
+  // 上游失败不报错（后端恒 200 四计数），仅 DB 失败/网络错误走 onError。
+  const refreshQuotes = useMutation({
+    mutationFn: () => api.refreshInvest(),
+    onSuccess: (r) => {
+      toast.success(t("invest.refreshDone", { quotes: r.refreshed_quotes, pes: r.refreshed_pes }))
+      qc.invalidateQueries({ queryKey: ["positions"] })
+      qc.invalidateQueries({ queryKey: ["assets"] })
+      qc.invalidateQueries({ queryKey: ["dashboard"] })
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("invest.refreshFailed")),
+  })
+
   // 自定义顺序拖拽（HTML5 原生 DnD，未引库）：仅「全部」筛选 + sortKey===null 时可拖。
   // 触屏不支持 HTML5 DnD——桌面特性：触屏下把手不可拖但不影响表格滚动/点击。
   const dragEnabled = sortKey === null && typeFilter === "all"
@@ -273,17 +287,26 @@ export default function InvestPage() {
           <section className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-medium text-muted-foreground">{t("invest.section.holdings")}</h2>
-              {/* 类型筛选 Tab：只过滤下方持仓表行；汇总卡/曲线/占比/流水保持全局口径不随筛选变 */}
-              <Tabs value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
-                <TabsList>
-                  {TYPE_FILTERS.map((f) => (
-                    <TabsTrigger key={f.value} value={f.value}>
-                      {t(f.labelKey)}
-                      <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[10px] leading-4 tnum">{countByFilter(f.value)}</span>
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 类型筛选 Tab：只过滤下方持仓表行；汇总卡/曲线/占比/流水保持全局口径不随筛选变 */}
+                <Tabs value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
+                  <TabsList>
+                    {TYPE_FILTERS.map((f) => (
+                      <TabsTrigger key={f.value} value={f.value}>
+                        {t(f.labelKey)}
+                        <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[10px] leading-4 tnum">{countByFilter(f.value)}</span>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+                {/* 强制刷新现价+PE：pending 时图标旋转并禁用（兼作连点防抖） */}
+                <Button variant="outline" size="icon" data-testid="refresh-quotes"
+                  aria-label={t("invest.refresh")} title={t("invest.refresh")}
+                  disabled={refreshQuotes.isPending}
+                  onClick={() => refreshQuotes.mutate()}>
+                  <RefreshCw className={cn("size-4", refreshQuotes.isPending && "animate-spin")} />
+                </Button>
+              </div>
             </div>
             <div className="rounded-xl border border-border bg-card overflow-x-auto">
               <Table>
