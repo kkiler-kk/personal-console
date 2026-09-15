@@ -18,6 +18,11 @@ var snapshotLoc = time.FixedZone("CST", 8*3600)
 // snapshotCronSpec 为每日 06:00（北京时间，由 cron.WithLocation 解释）触发。
 const snapshotCronSpec = "0 6 * * *"
 
+// AutoTrackedWhere 为自动跟踪资产的 SQL 谓词（manual 手输价不参与自动行情）。
+// 单一来源：本文件两处快照查询与 handler/invest.go 的强制刷新端点共用，勿复制粘贴
+// （谓词列 price_source 不带别名，在带别名的查询中同样可解析——仅 assets 有该列）。
+const AutoTrackedWhere = "price_source IN ('yahoo','computed_gold_cny','fund_cn')"
+
 // StartSnapshotScheduler 启动每日快照调度器，并异步执行启动补跑：
 // 若当前北京时间已过今天 06:00 且存在任一自动跟踪资产（yahoo/computed_gold_cny/fund_cn）
 // 在补跑日期（今天 06:00 CST 对应的 UTC 日期，恒为 D-1，与 cron 行日期同口径）
@@ -73,7 +78,7 @@ func catchUpNeeded(ctx context.Context, db *sqlx.DB) (time.Time, bool) {
 	var missing int
 	err := db.GetContext(ctx, &missing,
 		`SELECT COUNT(*) FROM assets a
-		 WHERE a.price_source IN ('yahoo','computed_gold_cny','fund_cn')
+		 WHERE `+AutoTrackedWhere+`
 		   AND NOT EXISTS (SELECT 1 FROM price_history p
 		                   WHERE p.symbol=a.symbol AND p.date=?)`,
 		snapshotDate.Format("2006-01-02"))
@@ -100,7 +105,7 @@ func RunSnapshot(ctx context.Context, db *sqlx.DB, qs *quote.Service, snapshotDa
 		PriceSource string `db:"price_source"`
 	}
 	if err := db.SelectContext(ctx, &assets,
-		`SELECT symbol, price_source FROM assets WHERE price_source IN ('yahoo','computed_gold_cny','fund_cn')`); err != nil {
+		`SELECT symbol, price_source FROM assets WHERE `+AutoTrackedWhere); err != nil {
 		log.Printf("snapshot: load assets: %v", err)
 		return
 	}

@@ -37,7 +37,7 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client, qs *quote.Service
 	// invest: quote.Service 单实例由 main.go 传入，asset/invest handler 共享
 	ah := handler.NewAssetHandler(db, qs, rdb)
 	trh := handler.NewTradeHandler(db, rdb)
-	ih := handler.NewInvestHandler(db, qs)
+	ih := handler.NewInvestHandler(db, qs, rdb)
 
 	// learn: profiles/sessions/stats/calendar（Task 3.3）
 	lh := handler.NewLearnHandler(db, rdb)
@@ -126,6 +126,8 @@ func Setup(cfg *config.Config, db *sqlx.DB, rdb *redis.Client, qs *quote.Service
 		protected.GET("/positions/history", ih.PositionsHistory)
 		protected.GET("/quotes", ih.Quotes)
 		protected.GET("/price-history", ih.PriceHistory)
+		// 强制刷新现价+PE（迭代六）：/invest/refresh 为纯静态段，POST 树内无参数路由冲突
+		protected.POST("/invest/refresh", ih.RefreshQuotes)
 
 		// learn: profiles / sessions / stats / calendar
 		protected.GET("/learn/profiles", lh.Profiles)

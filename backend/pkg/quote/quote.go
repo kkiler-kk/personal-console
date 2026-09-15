@@ -153,6 +153,19 @@ func newHTTPClient(cfg *config.Config) *http.Client {
 //  3. provider 链第一个成功者：缓存 60s + 写回 assets.current_price（best-effort）；
 //  4. 全链失败：读 assets 兜底（Stale=true）；无兜底则该 symbol 缺席 map 并 log。
 func (s *Service) Quotes(ctx context.Context, symbols []string) map[string]Quote {
+	return s.quotes(ctx, symbols, false)
+}
+
+// QuotesForce 与 Quotes 完全同构，唯一区别是跳过 Redis 缓存**读取**（强制刷新，迭代六）：
+// 每个 symbol 都直取上游；成功结果照常写缓存 + writeBackPrice，全链失败照常降级
+// staleQuote / 缺席（「行情永不报错」契约不变）。
+func (s *Service) QuotesForce(ctx context.Context, symbols []string) map[string]Quote {
+	return s.quotes(ctx, symbols, true)
+}
+
+// quotes 为 Quotes/QuotesForce 的共享主体；force=true 仅跳过 cachedQuote 读分支，
+// 其余逐行不变（写缓存/写回/兜底路径两者一致）。
+func (s *Service) quotes(ctx context.Context, symbols []string, force bool) map[string]Quote {
 	out := make(map[string]Quote, len(symbols))
 	for _, symbol := range symbols {
 		if symbol == "" {
@@ -161,9 +174,11 @@ func (s *Service) Quotes(ctx context.Context, symbols []string) map[string]Quote
 		if _, ok := out[symbol]; ok {
 			continue
 		}
-		if q, ok := s.cachedQuote(ctx, symbol); ok {
-			out[symbol] = q
-			continue
+		if !force {
+			if q, ok := s.cachedQuote(ctx, symbol); ok {
+				out[symbol] = q
+				continue
+			}
 		}
 		if raw, ok := s.fetchFresh(ctx, symbol); ok {
 			q := Quote{

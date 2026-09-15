@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"math"
+	"net/http"
+	"net/url"
+	"sync/atomic"
 	"testing"
 )
 
@@ -147,6 +150,95 @@ func TestServiceGoldHookNilSkips(t *testing.T) {
 	got := s.Quotes(context.Background(), []string{GoldSymbol})
 	if _, ok := got[GoldSymbol]; ok {
 		t.Fatalf("gold quote should be absent while resolver is nil, got=%+v", got)
+	}
+}
+
+// countingProvider 记录 Fetch 调用次数，验证 force 路径确实打到 provider 层。
+type countingProvider struct {
+	fakeProvider
+	calls atomic.Int32
+}
+
+func (c *countingProvider) Fetch(ctx context.Context, symbol string) (*RawQuote, error) {
+	c.calls.Add(1)
+	return c.fakeProvider.Fetch(ctx, symbol)
+}
+
+// 迭代六（强制刷新）：无 Redis 环境下 QuotesForce 与 Quotes 行为完全一致——
+// provider 被调、成功结果字段正确（非 stale）、全链失败且无 DB 时同样缺席 map。
+// force 跳缓存的实证依赖真 Redis，走 8090 集成验证（控制器裁决：不引 redis 假件依赖）。
+func TestServiceQuotesForceMatchesQuotesWithoutRedis(t *testing.T) {
+	p := &countingProvider{fakeProvider: fakeProvider{name: "p", quotes: map[string]*RawQuote{
+		"AAPL": {Price: 228.5, PreviousClose: 225.1, Currency: "USD"},
+	}}}
+	s := newServiceWithProviders(nil, nil, nil, p)
+	ctx := context.Background()
+
+	// 成功路径：字段与 Quotes 一致（UpdatedAt 为时间戳，只断言非零）。
+	want := s.Quotes(ctx, []string{"AAPL", "", "AAPL"})
+	got := s.QuotesForce(ctx, []string{"AAPL", "", "AAPL"})
+	if len(want) != 1 || len(got) != 1 {
+		t.Fatalf("len(want)=%d len(got)=%d, want 1/1（去重+空串跳过）", len(want), len(got))
+	}
+	if p.calls.Load() != 2 {
+		t.Fatalf("provider calls=%d want 2（无缓存环境下 Quotes/QuotesForce 各打一次）", p.calls.Load())
+	}
+	q, w := got["AAPL"], want["AAPL"]
+	if q.Price != w.Price || q.PreviousClose != w.PreviousClose || q.Currency != w.Currency ||
+		q.Symbol != w.Symbol || q.Stale != w.Stale || q.Stale {
+		t.Fatalf("QuotesForce=%+v 与 Quotes=%+v 行为不一致", q, w)
+	}
+	if q.UpdatedAt.IsZero() {
+		t.Fatal("QuotesForce 成功结果 UpdatedAt 不应为零值")
+	}
+
+	// 全链失败 + 无 DB：与 Quotes 一致地缺席 map（无 stale 兜底），且不 panic。
+	down := &fakeProvider{name: "down", err: errors.New("boom")}
+	s2 := newServiceWithProviders(nil, nil, nil, down)
+	if got := s2.QuotesForce(ctx, []string{"AAPL"}); len(got) != 0 {
+		t.Fatalf("force 全链失败无 DB 应为空 map, got=%+v", got)
+	}
+}
+
+// 迭代六（强制刷新）：无 Redis 环境下 PEsForce 与 PEs 行为一致——
+// v7 被调、有值/null 条目解析正确、空入参零网络。复用 fundamentals_test.go 的
+// httptest 假 crumb 流程（rdb=nil，不碰 Redis）。
+func TestServicePEsForceMatchesPEsWithoutRedis(t *testing.T) {
+	f := newFakeFundServer(t,
+		func(int32) (int, string) { return http.StatusOK, "CRUMB123" },
+		func(int32, url.Values) (int, string) { return http.StatusOK, v7FixtureBody })
+	s := newFundTestService(f, nil)
+	ctx := context.Background()
+
+	got := s.PEsForce(ctx, []string{"AAPL", "GC=F", "", "AAPL"})
+	if len(got) != 2 {
+		t.Fatalf("len=%d want 2（去重+空串跳过）, got=%v", len(got), got)
+	}
+	if pe := got["AAPL"]; pe == nil || *pe != 31.4 {
+		t.Fatalf("AAPL pe=%v want 31.4", pe)
+	}
+	if pe, ok := got["GC=F"]; !ok || pe != nil {
+		t.Fatalf("GC=F want present nil entry, ok=%v pe=%v", ok, pe)
+	}
+	if f.v7Calls.Load() != 1 {
+		t.Fatalf("v7Calls=%d want 1（一次批量请求）", f.v7Calls.Load())
+	}
+
+	// 空入参：零网络零 Redis，返回空 map（与 PEs 同款安全语义）。
+	if empty := s.PEsForce(ctx, nil); len(empty) != 0 {
+		t.Fatalf("empty symbols want empty map, got=%v", empty)
+	}
+	if n := f.v7Calls.Load(); n != 1 {
+		t.Fatalf("empty symbols triggered v7 (calls=%d)", n)
+	}
+
+	// 上游失败：nil 条目降级，不 panic（rdb=nil 时 null 缓存写为 no-op）。
+	f2 := newFakeFundServer(t,
+		func(int32) (int, string) { return http.StatusInternalServerError, "boom" },
+		func(int32, url.Values) (int, string) { return http.StatusOK, v7FixtureBody })
+	s2 := newFundTestService(f2, nil)
+	if pe, ok := s2.PEsForce(ctx, []string{"AAPL"})["AAPL"]; !ok || pe != nil {
+		t.Fatalf("force 失败降级 want present nil entry, ok=%v pe=%v", ok, pe)
 	}
 }
 

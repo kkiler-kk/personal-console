@@ -251,6 +251,19 @@ func (s *Service) fetchPEs(ctx context.Context, symbols []string) (map[string]*f
 // 返回 map 中查不到的 symbol（含 v7 未返回者）为 nil 值条目；
 // 空/重复/空串 symbols 安全：空入参零网络零 Redis，返回空 map。
 func (s *Service) PEs(ctx context.Context, symbols []string) map[string]*float64 {
+	return s.pes(ctx, symbols, false)
+}
+
+// PEsForce 与 PEs 完全同构，唯一区别是跳过 Redis 缓存**读取**（强制刷新，迭代六）：
+// 含防穿透 null 条目在内一律不读，所有 symbol 都进 miss 批量直取 v7；
+// 成功/null 结果照常 SETEX 写回（跳读不跳写），失败降级为 nil 条目（永不返 error）。
+func (s *Service) PEsForce(ctx context.Context, symbols []string) map[string]*float64 {
+	return s.pes(ctx, symbols, true)
+}
+
+// pes 为 PEs/PEsForce 的共享主体；force=true 仅跳过 cachedFundamental 读分支，
+// 其余逐行不变（成功写值/缺失写 null/失败写 null 防穿透，两者一致）。
+func (s *Service) pes(ctx context.Context, symbols []string, force bool) map[string]*float64 {
 	out := make(map[string]*float64, len(symbols))
 	miss := make([]string, 0, len(symbols))
 	for _, sym := range symbols {
@@ -261,9 +274,11 @@ func (s *Service) PEs(ctx context.Context, symbols []string) map[string]*float64
 			continue
 		}
 		out[sym] = nil // 默认 nil 条目：缓存 miss 且 v7 缺席/失败时保持
-		if pe, ok := s.cachedFundamental(ctx, sym); ok {
-			out[sym] = pe
-			continue
+		if !force {
+			if pe, ok := s.cachedFundamental(ctx, sym); ok {
+				out[sym] = pe
+				continue
+			}
 		}
 		miss = append(miss, sym)
 	}

@@ -11,20 +11,24 @@ import (
 	"blog/model"
 	"blog/pkg/portfolio"
 	"blog/pkg/quote"
+	"blog/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
 )
 
-// InvestHandler 提供持仓、批量报价、历史收盘价等只读投资视图。
+// InvestHandler 提供持仓、批量报价、历史收盘价等只读投资视图，
+// 以及强制刷新端点（RefreshQuotes，迭代六）。
 type InvestHandler struct {
 	db     *sqlx.DB
 	quotes *quote.Service
+	redis  *redis.Client // RefreshQuotes 成功后失效 dashboard:summary
 }
 
 // NewInvestHandler 构造 InvestHandler（qs 与 AssetHandler 共享同一实例）。
-func NewInvestHandler(db *sqlx.DB, qs *quote.Service) *InvestHandler {
-	return &InvestHandler{db: db, quotes: qs}
+func NewInvestHandler(db *sqlx.DB, qs *quote.Service, rdb *redis.Client) *InvestHandler {
+	return &InvestHandler{db: db, quotes: qs, redis: rdb}
 }
 
 // PositionRow 为单个资产的持仓行。指针字段在无行情/无昨收时为 nil。
@@ -109,17 +113,9 @@ func (h *InvestHandler) ComputePositionsResponse(ctx context.Context) (*Position
 	quotes := h.quotes.Quotes(ctx, symbols)
 	fx := h.quotes.USDCNY(ctx)
 
-	// PE(TTM)：仅非 manual、非积存金、非中国基金资产——GOLD_CNY_G 是虚拟 symbol（Yahoo v7
-	// 不认识），场外基金没有市盈率概念（fund_cn 净值源也不提供 PE），二者请求只会白打一次上游。
+	// PE(TTM)：仅非 manual、非积存金、非中国基金资产（谓词见 peSymbols）。
 	// PEs 永不返 error：失败时全 nil + null 缓存，positions 照常 200（全局约束）。
-	peSymbols := make([]string, 0, len(assets))
-	for _, a := range assets {
-		if a.PriceSource == "manual" || a.PriceSource == "fund_cn" || a.Symbol == quote.GoldSymbol {
-			continue
-		}
-		peSymbols = append(peSymbols, a.Symbol)
-	}
-	pes := h.quotes.PEs(ctx, peSymbols)
+	pes := h.quotes.PEs(ctx, peSymbols(assets))
 
 	resp := &PositionsResp{Positions: []PositionRow{}}
 	var totalValue, totalCost, totalPnl, dayPnl float64
@@ -219,6 +215,71 @@ func (h *InvestHandler) Positions(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// peSymbols 过滤出需要请求 PE(TTM) 的资产 symbol：剔除 manual（手输价即权威）、
+// fund_cn（场外基金无市盈率概念，净值源也不提供 PE）与 GOLD_CNY_G（虚拟 symbol，
+// Yahoo v7 不认识）——请求只会白打一次上游。ComputePositionsResponse 与
+// RefreshQuotes 共用（单一来源，勿复制粘贴）。
+func peSymbols(assets []model.Asset) []string {
+	out := make([]string, 0, len(assets))
+	for _, a := range assets {
+		if a.PriceSource == "manual" || a.PriceSource == "fund_cn" || a.Symbol == quote.GoldSymbol {
+			continue
+		}
+		out = append(out, a.Symbol)
+	}
+	return out
+}
+
+// RefreshQuotes 强制刷新持仓现价与 PE(TTM)（POST /api/invest/refresh，迭代六）：
+//   - 现价：自动跟踪资产（service.AutoTrackedWhere，与每日快照同款谓词）走
+//     QuotesForce——跳过 Redis 60s 缓存读取直取上游，成功结果照常写缓存/写回价；
+//   - PE：全部 assets 经 peSymbols 过滤后走 PEsForce——跳过 1h 缓存读取（含防穿透
+//     null 条目），结果照常写回；
+//   - 「行情永不报错」契约：Quotes/PEs 不返 error，上游全失败时计数为 0 照常 200；
+//     仅 DB 查询本身失败返回 500；
+//   - 刷新会写回 assets.current_price，portfolio 相关汇总随之变化 → DEL dashboard:summary。
+//
+// 响应四计数：refreshed=非 stale 行情数 / 非 nil PE 数；total=送刷的 symbol 数。
+func (h *InvestHandler) RefreshQuotes(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	autoSymbols := []string{}
+	if err := h.db.SelectContext(ctx, &autoSymbols,
+		"SELECT symbol FROM assets WHERE "+service.AutoTrackedWhere); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	quotes := h.quotes.QuotesForce(ctx, autoSymbols)
+	refreshedQuotes := 0
+	for _, q := range quotes {
+		if !q.Stale {
+			refreshedQuotes++
+		}
+	}
+
+	assets := []model.Asset{}
+	if err := h.db.SelectContext(ctx, &assets, "SELECT * FROM assets"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	peSyms := peSymbols(assets)
+	pes := h.quotes.PEsForce(ctx, peSyms)
+	refreshedPEs := 0
+	for _, pe := range pes {
+		if pe != nil {
+			refreshedPEs++
+		}
+	}
+
+	h.redis.Del(context.Background(), "dashboard:summary")
+	c.JSON(http.StatusOK, gin.H{
+		"refreshed_quotes": refreshedQuotes,
+		"total_quotes":     len(autoSymbols),
+		"refreshed_pes":    refreshedPEs,
+		"total_pes":        len(peSyms),
+	})
 }
 
 // Quotes 批量报价：?symbols= 逗号分隔（上限 50），按入参顺序稳定返回，缺席的 symbol 跳过。
