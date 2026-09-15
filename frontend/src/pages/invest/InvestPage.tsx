@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
@@ -60,6 +61,32 @@ function cmpPos(a: PositionRow, b: PositionRow, k: SortKey, dir: SortDir): numbe
   if (av == null) return 1
   if (bv == null) return -1
   return dir === "asc" ? av - bv : bv - av
+}
+
+// 资产占比分组规则（迭代七）：同一底层指数的多只资产合并为一组行，悬停显示组内明细。
+// 首批只有纳斯达克一条（用户点名）；未命中的资产保持独立组。黄金不并组——积存金=金价、
+// 021958=金股指数，底层资产不同（控制器裁决 Ruling-1）；扩展只需在本数组追加 { key, labelKey, match }。
+// labelKey 为 i18n 键、渲染期经 t() 求值（防模块加载期固化语言的求值陷阱）——组名三语走 t()。
+const ALLOCATION_GROUPS: { key: string; labelKey: string; match: (name: string, symbol: string) => boolean }[] = [
+  {
+    key: "nasdaq",
+    labelKey: "invest.alloc.group.nasdaq",
+    match: (name, symbol) =>
+      name.includes("纳斯达克") || name.toLowerCase().includes("nasdaq") || symbol.includes("QQQ"),
+  },
+]
+
+// 分组后占比行：grouped=true 为多成员组（label 取 labelKey 三语组名 + 成员数），
+// 否则单资产组（label=name+symbol，与迭代七之前的展示一致）。
+// 浮层成员行只含比例/次数/日期，恒无金额——遮蔽态语义安全（浮层无需 masked 分支）。
+type AllocMember = {
+  name: string; symbol: string; valueCny: number
+  pctOfTotal: number; pctOfGroup: number
+  tradeCount: number; firstTrade: string; lastTrade: string // 日期已格式化 yyyy-MM-dd；无交易为空串
+}
+type AllocGroup = {
+  key: string; labelKey: string | null; name: string; symbol: string
+  valueCny: number; pct: number; grouped: boolean; members: AllocMember[]
 }
 
 // HTML5 DnD 插入位：指针位于目标行上半 = 插到该行前（top），下半 = 插到该行后（bottom）
@@ -106,7 +133,24 @@ export default function InvestPage() {
   const summary = positionsQ.data?.summary
   const assets = assetsQ.data?.assets ?? []
   const history = historyQ.data?.points ?? []
-  const trades = (tradesQ.data?.trades ?? []).slice(0, 50)
+  // 流水渲染仍截最近 50；交易统计（迭代七悬停浮层）基于查询拉取的全量（后端 LIMIT 200）而非渲染切片
+  const allTrades = useMemo(() => tradesQ.data?.trades ?? [], [tradesQ.data])
+  const trades = allTrades.slice(0, 50)
+  // 每资产交易统计：Map<asset_id, {count, first, last}>。traded_at 为同一时区偏移的 ISO 串
+  // （Go 本地日期序列化），字典序即时序；first/last 存原串，消费处经 formatDate 输出 yyyy-MM-dd
+  const tradeStats = useMemo(() => {
+    const m = new Map<number, { count: number; first: string; last: string }>()
+    for (const tr of allTrades) {
+      const s = m.get(tr.asset_id)
+      if (!s) m.set(tr.asset_id, { count: 1, first: tr.traded_at, last: tr.traded_at })
+      else {
+        s.count += 1
+        if (tr.traded_at < s.first) s.first = tr.traded_at
+        if (tr.traded_at > s.last) s.last = tr.traded_at
+      }
+    }
+    return m
+  }, [allTrades])
 
   // Tab 计数与行过滤同源：同一 positions、同一 `p.asset.type === v` 谓词，保证角标数与可见行数一致。
   // 排序模式（sortKey 非空）：副本稳定排序（并列保持自定义序），null 值恒沉底；拖拽仅在自定义序可用
@@ -204,14 +248,51 @@ export default function InvestPage() {
   const fxUsable = Number.isFinite(fx) && fx > 0
   const displayCurrency = currency === "USD" && fxUsable ? "USD" : "CNY"
   const totalVal = summary?.total_value_cny ?? 0
-  // 资产占比：每资产原币市值折算 CNY 后占总值百分比（spec 饼图降级为占比条，YAGNI）
-  const allocation = positions
-    .filter((p) => p.market_value != null && p.market_value > 0)
-    .map((p) => ({
-      key: p.asset.symbol, name: p.asset.name, symbol: p.asset.symbol,
-      valueCny: (p.market_value as number) * (p.asset.currency === "USD" ? fx : 1),
-    }))
-    .sort((a, b) => b.valueCny - a.valueCny)
+  // 资产占比（迭代七：分组聚合，spec 饼图降级为占比条，YAGNI）：两段计算——
+  // ① 每资产原币市值折算 CNY（同旧逻辑）② 经 ALLOCATION_GROUPS 规则归组（未命中→以 symbol 为 key 的独立组）。
+  // 组分母沿用 summary.total_value_cny（与旧单资产口径一致），组 pct=成员和；组间/组内均按 valueCny 降序
+  const allocation = useMemo<AllocGroup[]>(() => {
+    const rows = positions
+      .filter((p) => p.market_value != null && p.market_value > 0)
+      .map((p) => ({
+        id: p.asset.id, name: p.asset.name, symbol: p.asset.symbol,
+        valueCny: (p.market_value as number) * (p.asset.currency === "USD" ? fx : 1),
+      }))
+    const pctOf = (v: number) => (totalVal > 0 ? (v / totalVal) * 100 : 0)
+    const buckets = new Map<string, { labelKey: string | null; rows: typeof rows }>()
+    for (const r of rows) {
+      const rule = ALLOCATION_GROUPS.find((g) => g.match(r.name, r.symbol))
+      const key = rule ? rule.key : r.symbol
+      let b = buckets.get(key)
+      if (!b) { b = { labelKey: rule ? rule.labelKey : null, rows: [] }; buckets.set(key, b) }
+      b.rows.push(r)
+    }
+    const out: AllocGroup[] = []
+    for (const [key, b] of buckets) {
+      const valueCny = b.rows.reduce((s, r) => s + r.valueCny, 0)
+      const grouped = b.rows.length > 1
+      const members: AllocMember[] = b.rows
+        .slice()
+        .sort((x, y) => y.valueCny - x.valueCny)
+        .map((r) => {
+          const st = tradeStats.get(r.id)
+          return {
+            name: r.name, symbol: r.symbol, valueCny: r.valueCny,
+            pctOfTotal: pctOf(r.valueCny),
+            pctOfGroup: valueCny > 0 ? (r.valueCny / valueCny) * 100 : 0,
+            tradeCount: st?.count ?? 0,
+            firstTrade: st ? formatDate(st.first) : "",
+            lastTrade: st ? formatDate(st.last) : "",
+          }
+        })
+      out.push({
+        key, labelKey: grouped ? b.labelKey : null,
+        name: members[0]?.name ?? "", symbol: members[0]?.symbol ?? "",
+        valueCny, pct: pctOf(valueCny), grouped, members,
+      })
+    }
+    return out.sort((a, b) => b.valueCny - a.valueCny)
+  }, [positions, fx, totalVal, tradeStats])
 
   const priceValNum = Number(priceVal)
   // price > 0 对齐后端 binding gt=0（task 4.5）：前端先拦，避免裸 binding 英文错误 toast
@@ -471,20 +552,56 @@ export default function InvestPage() {
           <div className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,.06)] p-4 space-y-3">
             {allocation.length === 0 ? (
               <p className="text-sm text-muted-foreground py-12 text-center">{t("invest.empty.noMarketValue")}</p>
-            ) : allocation.map((x) => {
-              const pct = totalVal > 0 ? (x.valueCny / totalVal) * 100 : 0
-              return (
-                <div key={x.key} className="space-y-1">
-                  <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="truncate">{x.name} <span className="text-xs text-muted-foreground tnum">{x.symbol}</span></span>
-                    <span className="tnum text-muted-foreground shrink-0">{pct.toFixed(1)}%</span>
+            ) : allocation.map((g) => (
+              // 每占比行包 HoverCard：整行为 trigger（hover/focus 打开，tabIndex=0 保键盘可达）。
+              // 浮层只含比例/次数/日期，恒无金额——遮蔽态可直接打开（masked 无需分支）。
+              <HoverCard key={g.key} openDelay={120} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <div className="space-y-1 cursor-default rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    tabIndex={0} data-alloc-row={g.key} title={t("invest.alloc.hoverHint")}>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      {g.grouped ? (
+                        // 组行视觉提示：组名虚线下划线 + 成员数（单资产组维持 name+symbol 现状）
+                        <span className="truncate">
+                          <span className="underline decoration-dotted decoration-muted-foreground/60 underline-offset-4">
+                            {g.labelKey ? t(g.labelKey) : g.name}
+                          </span>
+                          <span className="ml-1.5 text-xs text-muted-foreground tnum">
+                            {t("invest.alloc.memberCount", { count: g.members.length })}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="truncate">{g.name} <span className="text-xs text-muted-foreground tnum">{g.symbol}</span></span>
+                      )}
+                      <span className="tnum text-muted-foreground shrink-0">{g.pct.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${g.pct}%` }} />
+                    </div>
                   </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              )
-            })}
+                </HoverCardTrigger>
+                <HoverCardContent side="left" align="center" className="w-72 space-y-2.5" data-alloc-detail={g.key}>
+                  {g.members.map((m) => (
+                    <div key={m.symbol} className="space-y-0.5">
+                      <div className="text-sm font-medium truncate">
+                        {m.name} <span className="text-xs font-normal text-muted-foreground tnum">{m.symbol}</span>
+                      </div>
+                      {/* 双比例：占总资产 + 组内（单资产组省略组内）；tnum 数字等宽 */}
+                      <div className="text-xs text-muted-foreground tnum">
+                        {t("invest.alloc.ofTotal", { pct: m.pctOfTotal.toFixed(1) })}
+                        {g.grouped && ` · ${t("invest.alloc.ofGroup", { pct: m.pctOfGroup.toFixed(1) })}`}
+                      </div>
+                      {/* 交易统计：N 笔 · 首 ~ 末（yyyy-MM-dd 原样）；无交易显示占位文案 */}
+                      <div className="text-xs text-muted-foreground tnum">
+                        {m.tradeCount > 0
+                          ? `${t("invest.alloc.tradeCount", { count: m.tradeCount })} · ${m.firstTrade} ~ ${m.lastTrade}`
+                          : t("invest.alloc.noTrades")}
+                      </div>
+                    </div>
+                  ))}
+                </HoverCardContent>
+              </HoverCard>
+            ))}
           </div>
         </section>
       </div>

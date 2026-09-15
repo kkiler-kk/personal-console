@@ -145,6 +145,18 @@ const zh = {
       ascHint: "升序 · 点击恢复自定义顺序",
       noneHint: "点击按此列降序排序",
     },
+    // 资产占比卡（迭代七）：分组行（组名+成员数）+ 悬停浮层（成员双比例 + 交易统计）；浮层恒无金额
+    alloc: {
+      hoverHint: "悬停查看明细",
+      memberCount_one: "{{count}} 项资产",
+      memberCount_other: "{{count}} 项资产",
+      ofTotal: "占总资产 {{pct}}%",
+      ofGroup: "组内 {{pct}}%",
+      tradeCount_one: "{{count}} 笔交易",
+      tradeCount_other: "{{count}} 笔交易",
+      noTrades: "暂无交易",
+      group: { nasdaq: "纳斯达克" },
+    },
     type: {
       stock: "股票",
       etf: "ETF",

@@ -145,6 +145,18 @@ const es = {
       ascHint: "Ascendente · haz clic para restaurar el orden personalizado",
       noneHint: "Haz clic para ordenar esta columna descendente",
     },
+    // Tarjeta de distribución (iteración siete): fila de grupo (etiqueta + nº de miembros) + desglose al pasar el cursor (doble porcentaje + estadísticas); el flotante nunca muestra importes
+    alloc: {
+      hoverHint: "Desplaza el cursor para ver detalles",
+      memberCount_one: "{{count}} activo",
+      memberCount_other: "{{count}} activos",
+      ofTotal: "{{pct}}% del total",
+      ofGroup: "{{pct}}% del grupo",
+      tradeCount_one: "{{count}} operación",
+      tradeCount_other: "{{count}} operaciones",
+      noTrades: "Sin operaciones",
+      group: { nasdaq: "Nasdaq" },
+    },
     type: {
       stock: "Acción",
       etf: "ETF",

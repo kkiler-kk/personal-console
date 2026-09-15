@@ -145,6 +145,18 @@ const en = {
       ascHint: "Ascending · click to restore custom order",
       noneHint: "Click to sort this column descending",
     },
+    // Allocation card (iteration seven): grouped row (label + member count) + hover breakdown (dual percentages + trade stats); the overlay never shows amounts
+    alloc: {
+      hoverHint: "Hover for details",
+      memberCount_one: "{{count}} asset",
+      memberCount_other: "{{count}} assets",
+      ofTotal: "{{pct}}% of total",
+      ofGroup: "{{pct}}% of group",
+      tradeCount_one: "{{count}} trade",
+      tradeCount_other: "{{count}} trades",
+      noTrades: "No trades",
+      group: { nasdaq: "Nasdaq" },
+    },
     type: {
       stock: "Stock",
       etf: "ETF",
